@@ -1,6 +1,6 @@
 import cv2
 from tracker import MouseTracker
-from regions import Region, RegionManager
+from regions import PolygonRegion, CircleRegion, RegionManager
 from logic import EventLogic
 import input
 
@@ -60,14 +60,14 @@ while True:
 
     # --- Visualización (solo para depuración) ---
     for region in regions.regions:
-        state = logic.states[region.id]
+        state = logic.states[region.region_id]
 
         if state.inside:
             color = (0, 0, 255)   # rojo
         else:
             color = (0, 255, 0)   # verde
 
-        cv2.drawContours(frame, [region.points], -1, color, 2)
+        region.draw(frame, color)
 
     cv2.imshow("frame", frame)
     cv2.imshow("fgmask", fgmask)

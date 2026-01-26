@@ -25,7 +25,7 @@ class MouseTracker:
             ser considerado como el ratón. Sirve para filtrar ruido.
         """
         self.bg = cv2.bgsegm.createBackgroundSubtractorMOG()
-        self.kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (6, 6))
+        self.kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
         self.min_area = min_area
 
     def locate(self, gray_frame):

@@ -50,7 +50,7 @@ class EventLogic:
     """
     def __init__(self, region_manager):
         self.regions = region_manager.regions
-        self.states = {r.id: ZoneState() for r in self.regions}
+        self.states = {r.region_id: ZoneState() for r in self.regions}
 
     def update(self, position, t):
         """
@@ -75,7 +75,7 @@ class EventLogic:
             return
 
         for region in self.regions:
-            state = self.states[region.id]
+            state = self.states[region.region_id]
             inside_now = region.contains(position)
 
             # Evento de entrada
