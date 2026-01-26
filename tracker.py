@@ -14,7 +14,7 @@ class MouseTracker:
     Su única salida es la posición estimada del objeto y la máscara
     binaria asociada a la detección.
     """
-    def __init__(self, min_area=2000):
+    def __init__(self, min_area=4000):
         """
         Inicializa el detector.
 
@@ -25,7 +25,7 @@ class MouseTracker:
             ser considerado como el ratón. Sirve para filtrar ruido.
         """
         self.bg = cv2.bgsegm.createBackgroundSubtractorMOG()
-        self.kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        self.kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (6, 6))
         self.min_area = min_area
 
     def locate(self, gray_frame):
@@ -65,6 +65,17 @@ class MouseTracker:
         if cv2.contourArea(cnt) < self.min_area:
             return None, fgmask
 
-        x, y, w, h = cv2.boundingRect(cnt)
-        center = (x + w // 2, y + h // 2)
+        #x, y, w, h = cv2.boundingRect(cnt)
+        #center = (x + w // 2, y + h // 2)
+        
+        #Mejor centroide del contorno no el bounding box
+        M = cv2.moments(cnt)
+        if M["m00"] == 0:
+            return None, fgmask
+
+        center = (
+            int(M["m10"] / M["m00"]),
+            int(M["m01"] / M["m00"])
+        )
+
         return center, fgmask
