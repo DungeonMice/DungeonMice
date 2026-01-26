@@ -2,7 +2,7 @@ import cv2
 from tracker import MouseTracker
 from regions import Region, RegionManager
 from logic import EventLogic
-
+import input
 
 """
 experiment.py
@@ -21,17 +21,19 @@ integrar componentes que ya funcionan de forma independiente.
 """
 
 # --- Inicialización del video ---
-cap = cv2.VideoCapture("mice_dungeon.mp4")
+
+input = input.input2 # Condiciones iniciales
+
+video_path = input['video_path']
+
+cap = cv2.VideoCapture(video_path)
 fps = cap.get(cv2.CAP_PROP_FPS)
 frame_idx = 0
 
 # --- Definición de regiones de interés ---
 # Más adelante podrán venir de mouse, archivo o GUI,
 # sin cambiar el resto del backend.
-regions = RegionManager([
-    Region("este",  [[620,450],[903,450],[900,320],[622,320]]),
-    Region("oeste", [[272,450],[274,320],[566,320],[562,450]])
-])
+regions = input['regions']
 
 # --- Inicialización de módulos del backend ---
 tracker = MouseTracker()
@@ -58,7 +60,14 @@ while True:
 
     # --- Visualización (solo para depuración) ---
     for region in regions.regions:
-        cv2.drawContours(frame, [region.points], -1, (0, 255, 0), 2)
+        state = logic.states[region.id]
+
+        if state.inside:
+            color = (0, 0, 255)   # rojo
+        else:
+            color = (0, 255, 0)   # verde
+
+        cv2.drawContours(frame, [region.points], -1, color, 2)
 
     cv2.imshow("frame", frame)
     cv2.imshow("fgmask", fgmask)
