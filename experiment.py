@@ -36,7 +36,7 @@ frame_idx = 0
 regions = input['regions']
 
 # --- Inicialización de módulos del backend ---
-tracker = MouseTracker()
+tracker = MouseTracker(min_area=100) #poner min_area=100 para otro video
 logic = EventLogic(regions)
 
 # --- Loop principal del experimento ---
@@ -53,10 +53,10 @@ while True:
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     # Localización del ratón
-    pos, fgmask = tracker.locate(gray)
+    pos_real, fgmask = tracker.locate(gray)
 
-    # Actualización de la lógica de eventos
-    logic.update(pos, t)
+    # Actualización de la lógica de eventos usando el centro suavizado
+    logic.update(pos_real, t)
 
     # --- Visualización (solo para depuración) ---
     for region in regions.regions:
@@ -68,6 +68,15 @@ while True:
             color = (0, 255, 0)   # verde
 
         region.draw(frame, color)
+    
+    # --- Visualización de la hitbox del ratón ---
+    if pos_real is not None:
+        inside_any = any(logic.states[r.region_id].inside for r in regions.regions)
+        hitbox_color = (0, 0, 255) if inside_any else (0, 255, 0)
+        x, y = pos_real
+        size = 35 #hay que cambiar para cada tamaño de ratón
+        #size = 10
+        cv2.rectangle(frame, (x-size, y-size), (x+size, y+size), hitbox_color, 2)
 
     cv2.imshow("frame", frame)
     cv2.imshow("fgmask", fgmask)

@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
 
-
 class MouseTracker:
     """
     Detector de posición del ratón basado en sustracción de fondo.
@@ -14,6 +13,7 @@ class MouseTracker:
     Su única salida es la posición estimada del objeto y la máscara
     binaria asociada a la detección.
     """
+
     def __init__(self, min_area=4000):
         """
         Inicializa el detector.
@@ -33,8 +33,7 @@ class MouseTracker:
         Localiza la posición del ratón en un frame.
 
         Aplica sustracción de fondo, filtrado morfológico y detección
-        de contornos para estimar la posición del objeto como el centro
-        del contorno de mayor área.
+        de contornos para estimar la posición del objeto.
 
         Parámetros
         ----------
@@ -43,39 +42,38 @@ class MouseTracker:
 
         Retorna
         -------
-        center : tuple or None
-            Coordenadas (x, y) del centro del ratón si fue detectado.
-            Retorna None si no se detecta ningún objeto válido.
+        center_real : tuple or None
+            Coordenadas (x, y) del centro del ratón según el contorno
+            detectado. Útil para dibujar la hitbox en tiempo real.
+
         fgmask : np.ndarray
             Máscara binaria resultante de la sustracción de fondo,
             útil para depuración o visualización.
         """
         fgmask = self.bg.apply(gray_frame)
+        fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_CLOSE, self.kernel) #prueba
         fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, self.kernel)
         fgmask = cv2.dilate(fgmask, None, iterations=2)
 
-        cnts = cv2.findContours(
-            fgmask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )[0]
-
+        cnts = cv2.findContours(fgmask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
         if not cnts:
             return None, fgmask
 
+        # fallback si el ratón es muy pequeño
+        if not cnts or all(cv2.contourArea(c)<self.min_area for c in cnts):
+            cnts = [c for c in cnts if cv2.contourArea(c) > 5]  # 5 px mínimo
+            
         cnt = max(cnts, key=cv2.contourArea)
         if cv2.contourArea(cnt) < self.min_area:
             return None, fgmask
-
-        #x, y, w, h = cv2.boundingRect(cnt)
-        #center = (x + w // 2, y + h // 2)
-        
-        #Mejor centroide del contorno no el bounding box
+        # Centroide del contorno
         M = cv2.moments(cnt)
         if M["m00"] == 0:
             return None, fgmask
-
-        center = (
-            int(M["m10"] / M["m00"]),
-            int(M["m01"] / M["m00"])
-        )
-
-        return center, fgmask
+        cx_real = int(M["m10"]/M["m00"])
+        cy_real = int(M["m01"]/M["m00"])
+        center_real = (cx_real, cy_real)
+        
+        # Guardar posición para el próximo frame
+        self.prev_pos = center_real
+        return center_real, fgmask
