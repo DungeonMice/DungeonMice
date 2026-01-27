@@ -1,6 +1,5 @@
 import cv2
 from tracker import MouseTracker
-from regions import PolygonRegion, CircleRegion, RegionManager
 from logic import EventLogic
 import input
 
@@ -74,8 +73,8 @@ while True:
         inside_any = any(logic.states[r.region_id].inside for r in regions.regions)
         hitbox_color = (0, 0, 255) if inside_any else (0, 255, 0)
         x, y = pos_real
-        size = 35 #hay que cambiar para cada tamaño de ratón
-        #size = 10
+        #size = 35 #hay que cambiar para cada tamaño de ratón
+        size = 10
         cv2.rectangle(frame, (x-size, y-size), (x+size, y+size), hitbox_color, 2)
 
     cv2.imshow("frame", frame)

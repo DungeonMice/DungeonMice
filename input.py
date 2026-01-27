@@ -12,7 +12,15 @@ input1 = {
 input2 = {
 	"video_path" : "Escopolamina 1.avi",
 	"regions": RegionManager([
-							CircleRegion("centro",  [145,117], 25),
+							CircleRegion("centro",  [151,110], 40),
+							]),
+	
+}
+
+input3 = {
+	"video_path" : "Escopolamina 1_1280x720.avi",
+	"regions": RegionManager([
+							CircleRegion("centro",  [617,330], 100),
 							]),
 	
 }
