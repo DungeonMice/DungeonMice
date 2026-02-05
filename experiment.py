@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 from tracker import MouseTracker
 from logic import EventLogic
 import input
@@ -21,13 +22,16 @@ integrar componentes que ya funcionan de forma independiente.
 
 # --- Inicialización del video ---
 
-input = input.input2 # Condiciones iniciales
+input = input.input3 # Condiciones iniciales
 
 video_path = input['video_path']
 
 cap = cv2.VideoCapture(video_path)
 fps = cap.get(cv2.CAP_PROP_FPS)
 frame_idx = 0
+
+# Frame a partir del cual se empieza a DIBUJAR
+draw_start_frame = int(fps*6)  # *numero segundos después
 
 # --- Definición de regiones de interés ---
 # Más adelante podrán venir de mouse, archivo o GUI,
@@ -50,14 +54,34 @@ while True:
 
     # Conversión a escala de grises para el detector
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    
+    # Activar grabación de trayectoria cuando se alcance el frame indicado
+    if frame_idx == draw_start_frame:
+        tracker.start_recording()
 
     # Localización del ratón
     pos_real, fgmask = tracker.locate(gray)
 
     # Actualización de la lógica de eventos usando el centro suavizado
     logic.update(pos_real, t)
+    
+    # Dibujar trayectoria en la máscara si ya hay puntos grabados
+    if len(tracker.trajectory) > 1:
+        fgmask_color = cv2.cvtColor(fgmask, cv2.COLOR_GRAY2BGR)
+        
+        for i in range(1, len(tracker.trajectory)):
+            pt1 = tracker.trajectory[i-1]
+            pt2 = tracker.trajectory[i]
+            cv2.line(fgmask_color, pt1, pt2, (255, 255, 0), 2)
+        
+        fgmask = fgmask_color
+    else:
+        # Convertir máscara a color después del delay para mantener consistencia
+        if frame_idx >= draw_start_frame:
+            fgmask = cv2.cvtColor(fgmask, cv2.COLOR_GRAY2BGR)
 
-    # --- Visualización (solo para depuración) ---
+
+    # Visualización de regiones de interés
     for region in regions.regions:
         state = logic.states[region.region_id]
 
@@ -68,12 +92,12 @@ while True:
 
         region.draw(frame, color)
     
-    # --- Visualización de la hitbox del ratón ---
+    # Visualización de la hitbox del ratón 
     if pos_real is not None:
         inside_any = any(logic.states[r.region_id].inside for r in regions.regions)
         hitbox_color = (0, 0, 255) if inside_any else (0, 255, 0)
         x, y = pos_real
-        #size = 35 #hay que cambiar para cada tamaño de ratón
+        #size = 30 #hay que cambiar para cada tamaño de video
         size = 10
         cv2.rectangle(frame, (x-size, y-size), (x+size, y+size), hitbox_color, 2)
 
@@ -83,7 +107,39 @@ while True:
     # Salir con ESC
     if cv2.waitKey(30) & 0xFF == 27:
         break
+    
+# Calcular distancia total recorrida
+total_distance = tracker.get_total_distance()
+print(f"Distancia total: {total_distance:.2f} pixeles")
 
+# --- Guardar imagen de trayectoria sobre el primer frame ---
+cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+ret, background = cap.read()
+
+if ret and len(tracker.trajectory) > 1:
+    # Dibujar regiones
+    for region in regions.regions:
+        region.draw(background, (0, 255, 0), 2)
+    
+    # Dibujar trayectoria completa
+    for i in range(1, len(tracker.trajectory)):
+        pt1 = tracker.trajectory[i-1]
+        pt2 = tracker.trajectory[i]
+        cv2.line(background, pt1, pt2, (255, 0, 255), 2)
+    
+    # Marcar inicio (verde) y fin (rojo)
+    cv2.circle(background, tracker.trajectory[0], 8, (0, 255, 0), -1)
+    cv2.circle(background, tracker.trajectory[-1], 8, (0, 0, 255), -1)
+    
+    # ← Agregar texto con la distancia total
+    text = f"Distancia: {total_distance:.0f} px"
+    cv2.putText(background, text, (10, 30), 
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+    
+    # Guardar imagen
+    video_name = input['video_path'].split('.')[0]
+    cv2.imwrite(f"trajectory_{video_name}.png", background)
+    print(f"Guardado: trajectory_{video_name}.png")
 
 # --- Liberación de recursos ---
 cap.release()

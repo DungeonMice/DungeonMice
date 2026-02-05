@@ -27,7 +27,19 @@ class MouseTracker:
         self.bg = cv2.bgsegm.createBackgroundSubtractorMOG()
         self.kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
         self.min_area = min_area
-
+        self.trajectory = []
+        self.prev_pos = None
+        self.recording = False
+    
+    def start_recording(self):
+        """
+        Activa la grabación de la trayectoria.
+        
+        A partir de este momento, cada posición detectada se guardará
+        en self.trajectory.
+        """
+        self.recording = True
+        
     def locate(self, gray_frame):
         """
         Localiza la posición del ratón en un frame.
@@ -73,7 +85,42 @@ class MouseTracker:
         cx_real = int(M["m10"]/M["m00"])
         cy_real = int(M["m01"]/M["m00"])
         center_real = (cx_real, cy_real)
-        
-        # Guardar posición para el próximo frame
+        # Solo guardar si estamos grabando
+        if self.recording:
+            self.trajectory.append(center_real) 
         self.prev_pos = center_real
         return center_real, fgmask
+
+    def get_total_distance(self, start_frame=0):
+        """
+        Calcula la distancia total recorrida en píxeles.
+        
+        Parámetros
+        ----------
+        start_frame : int
+            Frame desde el cual empezar a contar (default: 0).
+            Útil para excluir movimientos iniciales.
+        
+        Retorna
+        -------
+        float
+            Distancia total en píxeles.
+        """
+        if len(self.trajectory) <= start_frame + 1:
+            return 0.0
+        
+        trajectory_filtered = self.trajectory[start_frame:]
+        total_distance = 0.0
+        
+        for i in range(1, len(trajectory_filtered)):
+            pt1 = trajectory_filtered[i-1]
+            pt2 = trajectory_filtered[i]
+            
+            # Distancia euclidiana entre dos puntos
+            dx = pt2[0] - pt1[0]
+            dy = pt2[1] - pt1[1]
+            distance = np.sqrt(dx*dx + dy*dy)
+            
+            total_distance += distance
+        
+        return total_distance
