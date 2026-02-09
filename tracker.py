@@ -4,14 +4,9 @@ import numpy as np
 class MouseTracker:
     """
     Detector de posición del ratón basado en sustracción de fondo.
-
     Esta clase se encarga exclusivamente de localizar la posición del
     objeto (ratón) en un frame en escala de grises usando técnicas
     clásicas de visión por computadora.
-
-    No conoce regiones de interés, tiempos ni lógica de eventos.
-    Su única salida es la posición estimada del objeto y la máscara
-    binaria asociada a la detección.
     """
 
     def __init__(self, min_area=4000):
@@ -70,11 +65,7 @@ class MouseTracker:
         cnts = cv2.findContours(fgmask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
         if not cnts:
             return None, fgmask
-
-        # fallback si el ratón es muy pequeño
-        if not cnts or all(cv2.contourArea(c)<self.min_area for c in cnts):
-            cnts = [c for c in cnts if cv2.contourArea(c) > 5]  # 5 px mínimo
-            
+    
         cnt = max(cnts, key=cv2.contourArea)
         if cv2.contourArea(cnt) < self.min_area:
             return None, fgmask
@@ -116,7 +107,7 @@ class MouseTracker:
             pt1 = trajectory_filtered[i-1]
             pt2 = trajectory_filtered[i]
             
-            # Distancia euclidiana entre dos puntos
+            # Distancia euclidiana entre dos puntos sqrt((x2-x1)² + (y2-y1)²)
             dx = pt2[0] - pt1[0]
             dy = pt2[1] - pt1[1]
             distance = np.sqrt(dx*dx + dy*dy)
@@ -124,3 +115,59 @@ class MouseTracker:
             total_distance += distance
         
         return total_distance
+    
+    def save_trajectory_image(self, video_cap, regions, output_filename=None):
+        """
+        Guarda una imagen con la trayectoria completa sobre el primer frame.
+        
+        Parámetros
+        ----------
+        video_cap : cv2.VideoCapture
+            Objeto de captura de video para obtener el primer frame.
+        regions : RegionManager
+            Regiones a dibujar en la imagen.
+        output_filename : str, optional
+            Nombre del archivo de salida. Si es None, se genera automáticamente.
+        
+        Retorna
+        -------
+        str or None
+            Nombre del archivo guardado, o None si falló.
+        """
+        # Obtener primer frame
+        current_pos = video_cap.get(cv2.CAP_PROP_POS_FRAMES)
+        video_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        ret, background = video_cap.read()
+        video_cap.set(cv2.CAP_PROP_POS_FRAMES, current_pos)  # Restaurar posición
+        
+        if not ret or len(self.trajectory) < 2:
+            return None
+        
+        # Dibujar regiones
+        for region in regions.regions:
+            region.draw(background, (0, 255, 0), 2)
+        
+        # Dibujar trayectoria completa
+        for i in range(1, len(self.trajectory)):
+            pt1 = self.trajectory[i-1]
+            pt2 = self.trajectory[i]
+            cv2.line(background, pt1, pt2, (255, 0, 255), 2)
+        
+        # Marcar inicio (verde) y fin (rojo)
+        cv2.circle(background, self.trajectory[0], 8, (0, 255, 0), -1)
+        cv2.circle(background, self.trajectory[-1], 8, (0, 0, 255), -1)
+        
+        # Agregar texto con la distancia total
+        total_distance = self.get_total_distance()
+        text = f"Distancia: {total_distance:.0f} px"
+        cv2.putText(background, text, (10, 30), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        
+        # Guardar imagen
+        if output_filename is None:
+            output_filename = f"trajectory_{id(self)}.png"
+        
+        cv2.imwrite(output_filename, background)
+        print(f"Guardado: {output_filename}")
+        
+        return output_filename 

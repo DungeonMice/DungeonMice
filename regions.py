@@ -5,7 +5,7 @@ import cv2
 regions.py
 ==========
 
-Definición de regiones de interés (ROIs) geométricas para procesamiento
+Definición de regiones de interés (ROI) geométricas para procesamiento
 de imágenes y visión por computador usando OpenCV.
 
 Este módulo define una interfaz común para regiones y dos implementaciones:
