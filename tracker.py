@@ -23,7 +23,7 @@ class MouseTracker:
         self.kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
         self.min_area = min_area
         self.trajectory = []
-        self.prev_pos = None
+        self.prev_pos = None # actualmente no se usa
         self.recording = False
     
     def start_recording(self):
@@ -58,8 +58,8 @@ class MouseTracker:
             útil para depuración o visualización.
         """
         fgmask = self.bg.apply(gray_frame)
-        fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_CLOSE, self.kernel) #prueba
-        fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, self.kernel)
+        fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_CLOSE, self.kernel) # rellena huecos dentro del ratón
+        fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, self.kernel) # elimina ruido pequeño
         fgmask = cv2.dilate(fgmask, None, iterations=2)
 
         cnts = cv2.findContours(fgmask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
@@ -77,9 +77,9 @@ class MouseTracker:
         cy_real = int(M["m01"]/M["m00"])
         center_real = (cx_real, cy_real)
         # Solo guardar si estamos grabando
-        if self.recording:
+        if self.recording:   # Mover arriba para que no se guarde nada antes de empezar a grabar
             self.trajectory.append(center_real) 
-        self.prev_pos = center_real
+        #self.prev_pos = center_real # creo que no se usa actualmente.
         return center_real, fgmask
 
     def get_total_distance(self, start_frame=0):
@@ -116,58 +116,4 @@ class MouseTracker:
         
         return total_distance
     
-    def save_trajectory_image(self, video_cap, regions, output_filename=None):
-        """
-        Guarda una imagen con la trayectoria completa sobre el primer frame.
-        
-        Parámetros
-        ----------
-        video_cap : cv2.VideoCapture
-            Objeto de captura de video para obtener el primer frame.
-        regions : RegionManager
-            Regiones a dibujar en la imagen.
-        output_filename : str, optional
-            Nombre del archivo de salida. Si es None, se genera automáticamente.
-        
-        Retorna
-        -------
-        str or None
-            Nombre del archivo guardado, o None si falló.
-        """
-        # Obtener primer frame
-        current_pos = video_cap.get(cv2.CAP_PROP_POS_FRAMES)
-        video_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-        ret, background = video_cap.read()
-        video_cap.set(cv2.CAP_PROP_POS_FRAMES, current_pos)  # Restaurar posición
-        
-        if not ret or len(self.trajectory) < 2:
-            return None
-        
-        # Dibujar regiones
-        for region in regions.regions:
-            region.draw(background, (0, 255, 0), 2)
-        
-        # Dibujar trayectoria completa
-        for i in range(1, len(self.trajectory)):
-            pt1 = self.trajectory[i-1]
-            pt2 = self.trajectory[i]
-            cv2.line(background, pt1, pt2, (255, 0, 255), 2)
-        
-        # Marcar inicio (verde) y fin (rojo)
-        cv2.circle(background, self.trajectory[0], 8, (0, 255, 0), -1)
-        cv2.circle(background, self.trajectory[-1], 8, (0, 0, 255), -1)
-        
-        # Agregar texto con la distancia total
-        total_distance = self.get_total_distance()
-        text = f"Distancia: {total_distance:.0f} px"
-        cv2.putText(background, text, (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-        
-        # Guardar imagen
-        if output_filename is None:
-            output_filename = f"trajectory_{id(self)}.png"
-        
-        cv2.imwrite(output_filename, background)
-        print(f"Guardado: {output_filename}")
-        
-        return output_filename 
+    

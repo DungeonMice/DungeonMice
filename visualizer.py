@@ -130,3 +130,55 @@ class ExperimentVisualizer:
                 return cv2.cvtColor(fgmask, cv2.COLOR_GRAY2BGR)
             else:
                 return fgmask
+            
+    def save_trajectory_image(self, video_cap, trajectory, total_distance, output_filename):
+        """
+        Guarda una imagen con la trayectoria completa sobre el primer frame.
+        
+        Parámetros
+        ----------
+        video_cap : cv2.VideoCapture
+            Objeto de captura de video para obtener el primer frame.
+        trajectory : list
+            Lista de puntos (x, y) de la trayectoria.
+        total_distance : float
+            Distancia total recorrida en píxeles.
+        output_filename : str
+            Nombre del archivo de salida.
+        
+        Retorna
+        -------
+        str or None
+            Nombre del archivo guardado, o None si falló.
+        """
+        # Obtener primer frame
+        video_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        ret, background = video_cap.read()
+        
+        if not ret or len(trajectory) < 2:
+            return None
+        
+        # Dibujar regiones
+        for region in self.regions.regions:
+            region.draw(background, (0, 255, 0), 2)
+        
+        # Dibujar trayectoria completa
+        for i in range(1, len(trajectory)):
+            pt1 = trajectory[i-1]
+            pt2 = trajectory[i]
+            cv2.line(background, pt1, pt2, (255, 0, 255), 2)
+        
+        # Marcar inicio (verde) y fin (rojo)
+        cv2.circle(background, trajectory[0], 8, (0, 255, 0), -1)
+        cv2.circle(background, trajectory[-1], 8, (0, 0, 255), -1)
+        
+        # Agregar texto con la distancia total
+        text = f"Distancia: {total_distance:.0f} px"
+        cv2.putText(background, text, (10, 30), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        
+        # Guardar imagen
+        cv2.imwrite(output_filename, background)
+        print(f"Guardado: {output_filename}")
+        
+        return output_filename

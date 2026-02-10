@@ -85,8 +85,8 @@ print(f"Distancia total: {total_distance:.2f} pixeles")
 
 # Guardar imagen de la trayectoria
 video_name = input['video_path'].split('.')[0]
-tracker.save_trajectory_image(cap, regions, f"trajectory_{video_name}.png")
-
+visualizer.save_trajectory_image(cap, tracker.trajectory, total_distance, 
+                                f"trajectory_{video_name}.png")
 # --- Liberación de recursos ---
 cap.release()
 cv2.destroyAllWindows()
