@@ -23,7 +23,6 @@ class MouseTracker:
         self.kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
         self.min_area = min_area
         self.trajectory = []
-        self.prev_pos = None # actualmente no se usa
         self.recording = False
     
     def start_recording(self):
@@ -59,7 +58,7 @@ class MouseTracker:
         """
         fgmask = self.bg.apply(gray_frame)
         fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_CLOSE, self.kernel) # rellena huecos dentro del ratón
-        fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, self.kernel) # elimina ruido pequeño
+        fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, self.kernel)  # elimina ruido pequeño
         fgmask = cv2.dilate(fgmask, None, iterations=2)
 
         cnts = cv2.findContours(fgmask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
@@ -69,19 +68,20 @@ class MouseTracker:
         cnt = max(cnts, key=cv2.contourArea)
         if cv2.contourArea(cnt) < self.min_area:
             return None, fgmask
+        
         # Centroide del contorno
         M = cv2.moments(cnt)
         if M["m00"] == 0:
             return None, fgmask
-        cx_real = int(M["m10"]/M["m00"])
-        cy_real = int(M["m01"]/M["m00"])
-        center_real = (cx_real, cy_real)
-        # Solo guardar si estamos grabando
-        if self.recording:   # Mover arriba para que no se guarde nada antes de empezar a grabar
-            self.trajectory.append(center_real) 
-        #self.prev_pos = center_real # creo que no se usa actualmente.
-        return center_real, fgmask
-
+        # Ahora solo guardamos la posición si estamos en modo grabación, para evitar guardar posiciones erráticas antes de empezar a dibujar.
+        if self.recording: 
+            cx_real = int(M["m10"]/M["m00"])
+            cy_real = int(M["m01"]/M["m00"])
+            center_real = (cx_real, cy_real)
+            self.trajectory.append(center_real)
+            return center_real, fgmask
+        return None, fgmask
+    
     def get_total_distance(self, start_frame=0):
         """
         Calcula la distancia total recorrida en píxeles.
