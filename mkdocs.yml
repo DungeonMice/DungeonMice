@@ -9,15 +9,15 @@ nav:
 - Primeros pasos: getting-started.md
 - Arquitectura: architecture.md
 - Módulos:
-  - prueba: modules/prueba.md
-  - Labirynth: modules/labirynth.md
-  - Regions: modules/regions.md
-  - Logic: modules/logic.md
-  - Tracker: modules/tracker.md
-  - input: modules/input.md
-  - visualizer: modules/visualizar.md
-  - experiment: modules/experiment.md
-- Contribuir: contributions.md
+  - prueba: docs/modules/prueba.md
+  - Labirynth: docs/modules/labirynth.md
+  - Regions: docs/modules/regions.md
+  - Logic: docs/modules/logic.md
+  - Tracker: docs/modules/tracker.md
+  - input: docs/modules/input.md
+  - visualizer: docs/modules/visualizar.md
+  - experiment: docs/modules/experiment.md
+- Contribuir: docs/contributions.md
 
 
 theme:
@@ -27,8 +27,6 @@ theme:
 markdown_extensions:
 - admonition
 - codehilite
-- toc:
-permalink: true
 
 plugins:
   - search
