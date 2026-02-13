@@ -1,1 +1,1 @@
-Labirynth
+::: labirynth

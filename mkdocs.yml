@@ -29,3 +29,10 @@ markdown_extensions:
 - codehilite
 - toc:
 permalink: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [../code]
