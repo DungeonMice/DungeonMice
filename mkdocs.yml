@@ -9,14 +9,15 @@ nav:
 - Primeros pasos: getting-started.md
 - Arquitectura: architecture.md
 - Módulos:
-  - prueba: modules/prueba.md
-#  - Labyrinth: modules/labyrinth.md
+  - Labyrinth: modules/labyrinth.md
   - Regions: modules/regions.md
   - Logic: modules/logic.md
   - Tracker: modules/tracker.md
   - input: modules/input.md
   - visualizer: modules/visualizer.md
   - experiment: modules/experiment.md
+  - RunExperiment: modules/run_experiment.md
+  - Run: modules/run.md
 - Contribuir: contributions.md
 
 

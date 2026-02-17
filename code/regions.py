@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+import math
 
 """
 regions.py
@@ -155,7 +156,6 @@ class CircleRegion(Region):
     Región de interés (ROI) definida por un círculo.
 
     Internamente se almacena como centro + radio.
-    No usa OpenCV para la prueba de pertenencia (más eficiente).
     """
 
     def __init__(self, region_id, center, radius):
@@ -201,6 +201,122 @@ class CircleRegion(Region):
         """
         center_int = tuple(map(int, self.center))
         cv2.circle(frame, center_int, int(self.radius), color, thickness)
+
+
+class CircularFractionRegion(Region):
+    """
+    ROI definida por una fracción arbitraria de un círculo.
+    """
+
+    def __init__(self,region_id,center,radius,angle_start=0.0,angle_end=None,fraction=None):
+        """
+        Parámetros
+        ----------
+        region_id : str | int
+        center : (x, y)
+        radius : float
+
+        Definir UNA de estas opciones:
+
+        angle_start + angle_end
+        angle_start + fraction 
+
+        fraction : número en (0, 1]
+            Fracción del círculo.
+        """
+
+        self.region_id = region_id
+        self.center = (float(center[0]), float(center[1]))
+        self.radius = float(radius)
+
+        if self.radius <= 0:
+            raise ValueError("El radio debe ser positivo")
+
+        angle_start = float(angle_start) % 360
+
+        # ----------------------------------------------------------
+        # Definición angular
+        # ----------------------------------------------------------
+        if fraction is not None:
+            if not (0 < fraction <= 1):
+                raise ValueError("fraction debe estar en (0, 1]")
+            angle_end = angle_start + 360.0 * float(fraction)
+
+        if angle_end is None:
+            raise ValueError("Debes definir angle_end o fraction")
+
+        self.angle_start = angle_start % 360
+        self.angle_end = float(angle_end) % 360
+
+    # --------------------------------------------------------------
+    # Utilidad angular
+    # --------------------------------------------------------------
+    def _angle_in_sector(self, angle):
+        if self.angle_start <= self.angle_end:
+            return self.angle_start <= angle <= self.angle_end
+        else:
+            return angle >= self.angle_start or angle <= self.angle_end
+
+    # --------------------------------------------------------------
+    # Pertenencia
+    # --------------------------------------------------------------
+    def contains(self, point):
+        dx = point[0] - self.center[0]
+        dy = point[1] - self.center[1]
+
+        # dentro del radio
+        if dx * dx + dy * dy > self.radius * self.radius:
+            return False
+
+        # dentro del ángulo
+        angle = math.degrees(math.atan2(dy, dx)) % 360
+        return self._angle_in_sector(angle)
+
+    # --------------------------------------------------------------
+    # Máscara
+    # --------------------------------------------------------------
+    def mask(self, shape):
+        mask = np.zeros(shape, dtype=np.uint8)
+        center_int = tuple(map(int, self.center))
+
+        cv2.ellipse(
+            mask,
+            center_int,
+            (int(self.radius), int(self.radius)),
+            0,
+            self.angle_start,
+            self.angle_end,
+            255,
+            -1,
+        )
+        return mask
+
+    # --------------------------------------------------------------
+    # Dibujo
+    # --------------------------------------------------------------
+    def draw(self, frame, color=(0, 255, 0), thickness=2):
+        center_int = tuple(map(int, self.center))
+
+        # arco
+        cv2.ellipse(
+            frame,
+            center_int,
+            (int(self.radius), int(self.radius)),
+            0,
+            self.angle_start,
+            self.angle_end,
+            color,
+            thickness,
+        )
+
+        # cerrar con líneas radiales
+        for angle in (self.angle_start, self.angle_end):
+            rad = math.radians(angle)
+            x = int(self.center[0] + self.radius * math.cos(rad))
+            y = int(self.center[1] + self.radius * math.sin(rad))
+            cv2.line(frame, center_int, (x, y), color, thickness)
+
+
 
 
 

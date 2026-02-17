@@ -64,7 +64,7 @@ while True:
     pos_real, fgmask = tracker.locate(gray)
 
     # Actualización de la lógica de eventos
-    logic.update(pos_real, t)
+    logic.update(pos_real, t, frame_idx)
     
     # --- Visualización ---
     fgmask = visualizer.draw_trajectory_on_mask(fgmask, tracker.trajectory, 
@@ -74,6 +74,9 @@ while True:
     
     cv2.imshow("frame", frame)
     cv2.imshow("fgmask", fgmask)
+    #print(f"Frame: {frame_idx}, Tiempo: {t:.2f} s, Posición: {pos_real}, Estados: {logic.states}")
+    #print(logic.states['H'].enter_frame, logic.states['H'].exit_frame) # Imprime los frames de entrada y salida de la región H
+    print(f"Frame: {frame_idx}, Tiempo: {t:.2f} s, Posición: {pos_real}, Estados: {{region_id: (inside, total_time) for region_id, state in logic.states.items()}}")
 
     # Salir con ESC
     if cv2.waitKey(30) & 0xFF == 27:

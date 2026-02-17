@@ -22,8 +22,12 @@ class ZoneState:
     def __init__(self):
         self.inside = False
         self.enter_time = None
+        self.enter_frame = [] # Lista de frames de entrada
+        self.exit_frame = [] # Lista de frames de salida
         self.total_time = 0
         self.entries = 0
+
+        self.events = [] # Lista de eventos (entrada/salida) con timestamps para análisis detallado
 
 
 class EventLogic:
@@ -50,9 +54,9 @@ class EventLogic:
     """
     def __init__(self, region_manager):
         self.regions = region_manager.regions
-        self.states = {r.region_id: ZoneState() for r in self.regions}
+        self.states = {r.region_id: ZoneState() for r in self.regions} # Se creaun zonestate para cada región y ahi se almacena todo lo que ocurre en esa region
 
-    def update(self, position, t):
+    def update(self, position, t, frame_idx):
         """
         Actualiza el estado de todas las regiones dado un nuevo frame.
 
@@ -66,6 +70,8 @@ class EventLogic:
             Si es None, no se actualiza ningún estado.
         t : float
             Timestamp actual en segundos (por ejemplo, frame / fps).
+        frame_idx : int
+            Índice del frame actual, para registro de eventos detallado.
 
         Retorna
         -------
@@ -82,10 +88,14 @@ class EventLogic:
             if inside_now and not state.inside:
                 state.inside = True
                 state.enter_time = t
+                state.enter_frame.append(frame_idx)
                 state.entries += 1
 
             # Evento de salida
             elif not inside_now and state.inside:
                 state.inside = False
                 state.total_time += t - state.enter_time
+                state.exit_frame.append(frame_idx)
+                state.events.append((state.enter_time, t))  # Registro de evento de salida
                 state.enter_time = None
+                
