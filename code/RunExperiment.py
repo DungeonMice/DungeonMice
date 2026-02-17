@@ -55,7 +55,7 @@ def main(labyrinth):
 		cv2.imshow("fgmask", fgmask)
 
 		# Salir con ESC
-		if cv2.waitKey(1) & 0xFF == 27:
+		if cv2.waitKey(30) & 0xFF == 27:
 			break
 
 	# --- Finalización ---

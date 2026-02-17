@@ -317,4 +317,4 @@ class MorrisPool(Labyrinth):
 	def write_results(self):
 		# Aquí se podrían agregar resultados específicos de Morris Pool, como la distancia recorrida dentro y fuera de la región, el tiempo dentro de la región, etc., utilizando los métodos específicos que se han definido para este tipo de laberinto.
 		print("Resultados de Morris Pool:")
-		print(self.event_list)
+		print(f"{self.event_list}" + "\n")
