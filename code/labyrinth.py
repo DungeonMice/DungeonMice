@@ -1,6 +1,8 @@
 from regions import RegionManager, PolygonRegion, CircleRegion, CircularFractionRegion
 import numpy as np
 from logic import EventLogic
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
 
 class Labyrinth:
 	"""
@@ -105,59 +107,52 @@ class Labyrinth:
 		"""
 		Calcula la distancia total recorrida en píxeles dentro de un rango de frames.
 
+		Los frames de entrada son absolutos del video. Internamente se convierten
+		a índices relativos de la trayectoria, que empieza en start_time * fps.
+
 		Parámetros
 		----------
 		start_frame : int
-			Frame desde el cual empezar a contar (default: 0).
-			
+			Frame absoluto del video desde el cual empezar (default: 0).
 		end_frame : int or None
-			Frame hasta el cual contar (default: None, lo que significa hasta el final de la trayectoria).
+			Frame absoluto del video hasta el cual contar (default: None = hasta el final).
 		
 		Retorna
-		float
 		-------
-		La distancia total en píxeles recorrida entre start_frame y end_frame.
-		Si no hay suficientes puntos para calcular la distancia, retorna 0.0.
+		float
+			Distancia total en píxeles recorrida entre start_frame y end_frame.
+			Retorna 0.0 si no hay suficientes puntos.
 		"""
-
 		trajectory = list(zip(self.trajectory_x, self.trajectory_y))
 
 		if len(trajectory) <= 1:
 			return 0.0
 
-		# Usar valores de la clase si no se especifican
-		if start_frame is None:
-			start_frame = int(self.start_time*self.fps)
-		if end_frame is None:
-			end_frame = int(self.end_time*self.fps)
+		# Convertir frames absolutos a índices relativos de la trayectoria
+		recording_start = int(self.start_time * self.fps)
 
-		n = len(trajectory)
+		if end_frame is None:
+			end_frame = len(trajectory)
+		else:
+			end_frame = max(0, end_frame - recording_start)
+
+		start_frame = max(0, start_frame - recording_start)
 
 		# Limitar a rango válido
-		start_frame = max(0, start_frame)
-		end_frame = min(n, end_frame)
-
-		#if end_frame - start_frame <= 0.2:
-		#	return 0.0
-
+		end_frame = min(len(trajectory), end_frame)
 
 		trajectory_filtered = trajectory[start_frame:end_frame]
 
 		total_distance = 0.0
-
 		for i in range(1, len(trajectory_filtered)):
 			pt1 = trajectory_filtered[i - 1]
 			pt2 = trajectory_filtered[i]
-
 			dx = pt2[0] - pt1[0]
 			dy = pt2[1] - pt1[1]
-
 			total_distance += np.sqrt(dx * dx + dy * dy)
 
 		return total_distance
 
-
-	
 
 class MorrisPool(Labyrinth):
 	"""
@@ -315,6 +310,145 @@ class MorrisPool(Labyrinth):
 	
 
 	def write_results(self):
-		# Aquí se podrían agregar resultados específicos de Morris Pool, como la distancia recorrida dentro y fuera de la región, el tiempo dentro de la región, etc., utilizando los métodos específicos que se han definido para este tipo de laberinto.
-		print("Resultados de Morris Pool:")
-		print(f"{self.event_list}" + "\n")
+		"""
+		Genera un archivo Excel con los resultados del experimento de Morris Pool.
+
+		El archivo contiene tres secciones:
+		- Metadatos: información del sujeto, tratamiento, laberinto y parámetros de grabación.
+		- Resumen: métricas globales del experimento (entradas, tiempos, distancias, latencia, porcentajes).
+		- Detalle por evento: tabla con cada entrada/salida individual a la región de interés,
+		incluyendo frames, tiempos, duración y distancia recorrida dentro de la región.
+
+		El archivo se guarda en el directorio de trabajo con el nombre:
+			results_{mace_type}_{subject_id}_{treatment}.xlsx
+
+		Retorna
+		-------
+		None
+		"""
+		
+		# ------------------------------------------------------------------
+		# Cálculos previos a escribir resultados
+		# ------------------------------------------------------------------
+
+		# Tiempo total que el sujeto pasó dentro de la región (suma de todos los eventos)
+		total_time_in_region = sum(e[0] for e in self.event_list)
+
+		# Distancia total recorrida durante toda la grabación
+		total_distance = self.get_total_distance()
+
+		# Duración total de la grabación en segundos
+		total_recording_time = len(self.trajectory_x) / self.fps
+
+		# Latencia: segundos desde start_recording hasta el primer ingreso a la región
+		latency = (self.enter_frame[0] / self.fps) - self.start_time if self.enter_frame else None
+
+		# Porcentaje del tiempo de grabación que el sujeto pasó en la región
+		pct_time = (total_time_in_region / total_recording_time * 100) if total_recording_time > 0 else 0
+
+		# Porcentaje de la distancia total recorrida que ocurrió dentro de la región
+		total_distance_in_region = sum(e[1] for e in self.event_list)
+		pct_distance = (total_distance_in_region / total_distance * 100) if total_distance > 0 else 0
+
+		# ------------------------------------------------------------------
+		# Crear workbook
+		# ------------------------------------------------------------------
+		wb = Workbook()
+		ws = wb.active
+		ws.title = "Resultados"
+
+		# ------------------------------------------------------------------
+		# Sección 1: Metadatos del experimento
+		# ------------------------------------------------------------------
+		meta = [
+			("Sujeto",         self.subject_id),
+			("Tratamiento",    self.treatment),
+			("Laberinto",      self.mace_type),
+			("Start time (s)", self.start_time),
+			("End time (s)",   self.end_time if self.end_time else "Hasta el final"),
+			("FPS",            self.fps),
+		]
+		for row in meta:
+			ws.append(row)
+
+		ws.append([])  # separador
+
+		# ------------------------------------------------------------------
+		# Sección 2: Resumen global
+		# ------------------------------------------------------------------
+		ws.append(["RESUMEN", ""])
+		ws.append(["Nº de entradas a la región",    len(self.enter_frame)])
+		ws.append(["Tiempo total en región (s)",     round(total_time_in_region, 3)])
+		ws.append(["Distancia total recorrida (px)", round(total_distance, 2)])
+		ws.append(["Latencia al primer ingreso (s)", round(latency, 3) if latency is not None else "No entró"])
+		ws.append(["% tiempo en región",             round(pct_time, 2)])
+		ws.append(["% distancia en región",          round(pct_distance, 2)])
+
+		ws.append([])  # separador
+
+		# ------------------------------------------------------------------
+		# Sección 3: Detalle por evento (una fila por entrada/salida)
+		# ------------------------------------------------------------------
+		headers = [
+			"Evento #",
+			"Frame entrada",
+			"Tiempo entrada (s)",
+			"Frame salida",
+			"Tiempo salida (s)",
+			"Duración en región (s)",
+			"Distancia en región (px)",
+		]
+		ws.append(headers)
+
+		# Estilo de encabezados: fondo azul, texto blanco, centrado
+		header_row = ws.max_row
+		for col in range(1, len(headers) + 1):
+			cell = ws.cell(row=header_row, column=col)
+			cell.font = Font(bold=True, color="FFFFFF")
+			cell.fill = PatternFill("solid", start_color="2F5496")
+			cell.alignment = Alignment(horizontal="center")
+
+		# Una fila por cada evento de entrada/salida
+		for i, event in enumerate(self.event_list):
+			ws.append([
+				i + 1,
+				self.enter_frame[i],
+				round(self.enter_frame[i] / self.fps, 3),
+				self.exit_frame[i],
+				round(self.exit_frame[i] / self.fps, 3),
+				round(event[0], 3),   # duración dentro de la región
+				round(event[1], 2),   # distancia dentro de la región
+			])
+
+		# Fila de totales con fórmulas Excel (se recalculan al abrir el archivo)
+		first_data_row = header_row + 1
+		last_data_row = ws.max_row
+		ws.append([
+			"TOTAL", "", "", "", "",
+			f"=SUM(F{first_data_row}:F{last_data_row})",
+			f"=SUM(G{first_data_row}:G{last_data_row})",
+		])
+		total_row = ws.max_row
+		for col in range(1, len(headers) + 1):
+			cell = ws.cell(row=total_row, column=col)
+			cell.font = Font(bold=True)
+			cell.fill = PatternFill("solid", start_color="D9E1F2")
+
+		# --- Centrar todo el contenido ---
+		for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+			for cell in row:
+				cell.alignment = Alignment(horizontal="center")
+        
+		# ------------------------------------------------------------------
+		# Formato: ancho de columnas
+		# ------------------------------------------------------------------
+		col_widths = [10, 16, 20, 14, 18, 24, 26]
+		for i, width in enumerate(col_widths, 1):
+			ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = width
+
+		# ------------------------------------------------------------------
+		# Guardar archivo
+		# ------------------------------------------------------------------
+		filename = f"results_{self.mace_type}_{self.subject_id}_{self.treatment}.xlsx"
+		wb.save(filename)
+		print(f"Resultados guardados en: {filename}")

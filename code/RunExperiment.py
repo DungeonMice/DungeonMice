@@ -50,6 +50,17 @@ def main(labyrinth):
 
 		# Procesamiento del frame
 		labyrinth.process_frame(position = trajectory ,time = t)
+  
+		# Mostrar timestamp en el frame
+		cv2.putText(
+			frame,
+			f"t = {t:.2f} s",
+			(10, 20),  # posición en el frame
+			cv2.FONT_HERSHEY_SIMPLEX,
+			0.5,       # tamaño de fuente, ajusta si se ve muy grande/pequeño
+			(255, 255, 255),  # color blanco
+			1
+		)
 
 		cv2.imshow("frame", frame)
 		cv2.imshow("fgmask", fgmask)
