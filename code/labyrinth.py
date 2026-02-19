@@ -453,3 +453,185 @@ class MorrisPool(Labyrinth):
 		wb.save(filename)
 		print(f"Resultados guardados en: {filename}")
   
+class CrossMaze(Labyrinth):
+    """
+    Clase para laberintos en cruz.
+    - Soporta cualquier número de regiones poligonales (brazos).
+    - Métricas por región: latencia, entradas, tiempo, distancia, porcentajes.
+    """
+
+    def __init__(self, video_path, treatment, subject_id, regions,
+                 min_detection_area, hitbox_size, start_time, end_time=None):
+
+        super().__init__(video_path, treatment, subject_id, "CrossMaze",
+                         regions, min_detection_area, hitbox_size, start_time, end_time)
+
+        self._validate_cross_maze_regions()
+
+    def _validate_cross_maze_regions(self):
+        if len(self.regions.regions) < 2:
+            raise ValueError("CrossMaze requiere al menos 2 regiones de interés.") # De momento, luego preguntar si se quiere exigir exactamente otra cantidad de regiones como minimo.
+        for region in self.regions.regions:
+            if not isinstance(region, PolygonRegion):
+                raise ValueError("Todas las regiones de CrossMaze deben ser PolygonRegion.")
+
+    def process_frame(self, position, time):
+        self.get_position(position, time)
+
+    def process_video(self, events_on_each_region):
+        self.write_results(events_on_each_region)
+
+    def write_results(self, events_on_each_region):
+        """
+        Genera un archivo Excel con los resultados del experimento CrossMaze.
+
+        Contiene:
+        - Metadatos del experimento.
+        - Resumen global: distancia total y duración total de grabación.
+        - Por cada región: resumen (latencia, entradas, tiempo, distancia, porcentajes)
+          y tabla de detalle por evento.
+
+        Parámetros
+        ----------
+        events_on_each_region : dict
+            Atributo 'states' de EventLogic — mapea region_id -> ZoneState.
+        """
+        # ------------------------------------------------------------------
+        # Cálculos globales
+        # ------------------------------------------------------------------
+        total_distance = self.get_total_distance()
+        total_recording_time = len(self.trajectory_x) / self.fps
+
+        # ------------------------------------------------------------------
+        # Crear workbook
+        # ------------------------------------------------------------------
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Resultados"
+
+        # ------------------------------------------------------------------
+        # Sección 1: Metadatos
+        # ------------------------------------------------------------------
+        meta = [
+            ("Sujeto",         self.subject_id),
+            ("Tratamiento",    self.treatment),
+            ("Laberinto",      self.mace_type),
+            ("Start time (s)", self.start_time),
+            ("End time (s)",   self.end_time if self.end_time else "Hasta el final"),
+            ("FPS",            self.fps),
+        ]
+        for row in meta:
+            ws.append(row)
+        ws.append([])
+
+        # ------------------------------------------------------------------
+        # Sección 2: Resumen global
+        # ------------------------------------------------------------------
+        ws.append(["RESUMEN GLOBAL", ""])
+        ws.append(["Distancia total recorrida (px)", round(total_distance, 2)])
+        ws.append(["Duración total grabación (s)",   round(total_recording_time, 3)])
+        ws.append([])
+
+        # ------------------------------------------------------------------
+        # Sección 3: Por cada región
+        # ------------------------------------------------------------------
+        for region in self.regions.regions:
+            region_id = region.region_id
+            state = events_on_each_region[region_id]
+
+            enter_frames = state.enter_frame
+            exit_frames  = state.exit_frame
+
+            # Verificar listas de entrada/salida
+            if len(enter_frames) == len(exit_frames) + 1:
+                exit_frames.append(int(self.fps * (self.end_time or total_recording_time + self.start_time)))
+
+            # Calcular métricas de esta región
+            event_list = []
+            for i in range(len(enter_frames)):
+                duration = (exit_frames[i] - enter_frames[i]) / self.fps
+                distance = self.get_total_distance(start_frame=enter_frames[i], end_frame=exit_frames[i])
+                event_list.append((duration, distance))
+
+            total_time_in_region     = sum(e[0] for e in event_list)
+            total_distance_in_region = sum(e[1] for e in event_list)
+            latency = (enter_frames[0] / self.fps) - self.start_time if enter_frames else None
+            pct_time     = (total_time_in_region / total_recording_time * 100)     if total_recording_time > 0 else 0
+            pct_distance = (total_distance_in_region / total_distance * 100) if total_distance > 0 else 0
+
+            # --- Resumen de esta región ---
+            ws.append([f"REGIÓN: {region_id}", ""])
+            ws.append(["Nº de entradas",                len(enter_frames)])
+            ws.append(["Tiempo total en región (s)",     round(total_time_in_region, 3)])
+            ws.append(["Distancia en región (px)",       round(total_distance_in_region, 2)])
+            ws.append(["Latencia al primer ingreso (s)", round(latency, 3) if latency is not None else "No entró"])
+            ws.append(["% tiempo en región",             round(pct_time, 2)])
+            ws.append(["% distancia en región",          round(pct_distance, 2)])
+            ws.append([])
+
+            # --- Tabla de detalle por evento ---
+            headers = [
+                "Evento #",
+                "Frame entrada",
+                "Tiempo entrada (s)",
+                "Frame salida",
+                "Tiempo salida (s)",
+                "Duración en región (s)",
+                "Distancia en región (px)",
+            ]
+            ws.append(headers)
+
+            header_row = ws.max_row
+            for col in range(1, len(headers) + 1):
+                cell = ws.cell(row=header_row, column=col)
+                cell.font      = Font(bold=True, color="FFFFFF")
+                cell.fill      = PatternFill("solid", start_color="2F5496")
+                cell.alignment = Alignment(horizontal="center")
+
+            for i, event in enumerate(event_list):
+                ws.append([
+                    i + 1,
+                    enter_frames[i],
+                    round(enter_frames[i] / self.fps, 3),
+                    exit_frames[i],
+                    round(exit_frames[i] / self.fps, 3),
+                    round(event[0], 3),
+                    round(event[1], 2),
+                ])
+
+            # Fila de totales
+            first_data_row = header_row + 1
+            last_data_row  = ws.max_row
+            ws.append([
+                "TOTAL", "", "", "", "",
+                f"=SUM(F{first_data_row}:F{last_data_row})",
+                f"=SUM(G{first_data_row}:G{last_data_row})",
+            ])
+            total_row = ws.max_row
+            for col in range(1, len(headers) + 1):
+                cell = ws.cell(row=total_row, column=col)
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill("solid", start_color="D9E1F2")
+
+            ws.append([])  # separador entre regiones
+
+        # ------------------------------------------------------------------
+        # Centrar todo
+        # ------------------------------------------------------------------
+        for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+            for cell in row:
+                cell.alignment = Alignment(horizontal="center")
+
+        # ------------------------------------------------------------------
+        # Ancho de columnas
+        # ------------------------------------------------------------------
+        col_widths = [10, 16, 20, 14, 18, 24, 26]
+        for i, width in enumerate(col_widths, 1):
+            ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = width
+
+        # ------------------------------------------------------------------
+        # Guardar
+        # ------------------------------------------------------------------
+        filename = f"results_{self.mace_type}_{self.subject_id}_{self.treatment}.xlsx"
+        wb.save(filename)
+        print(f"Resultados guardados en: {filename}")
