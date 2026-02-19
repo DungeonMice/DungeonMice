@@ -246,7 +246,7 @@ class CircularFractionRegion(Region):
             raise ValueError("Debes definir angle_end o fraction")
 
         self.angle_start = angle_start % 360
-        self.angle_end = float(angle_end) % 360
+        self.angle_end = float(angle_end)
 
     # --------------------------------------------------------------
     # Utilidad angular
@@ -295,26 +295,26 @@ class CircularFractionRegion(Region):
     # Dibujo
     # --------------------------------------------------------------
     def draw(self, frame, color=(0, 255, 0), thickness=2):
-        center_int = tuple(map(int, self.center))
+        center_x, center_y = self.center
+        cx, cy = int(round(center_x)), int(round(center_y))
+        
+        steps = 100
+        a_start = math.radians(self.angle_start)
+        a_end = math.radians(self.angle_end)
 
-        # arco
-        cv2.ellipse(
-            frame,
-            center_int,
-            (int(self.radius), int(self.radius)),
-            0,
-            self.angle_start,
-            self.angle_end,
-            color,
-            thickness,
-        )
+        # Calcular puntos del arco
+        arc_points = []
+        for i in range(steps + 1):
+            t = a_start + (a_end - a_start) * i / steps
+            x = int(round(center_x + self.radius * math.cos(t)))
+            y = int(round(center_y + self.radius * math.sin(t)))
+            arc_points.append((x, y))
 
-        # cerrar con líneas radiales
-        for angle in (self.angle_start, self.angle_end):
-            rad = math.radians(angle)
-            x = int(self.center[0] + self.radius * math.cos(rad))
-            y = int(self.center[1] + self.radius * math.sin(rad))
-            cv2.line(frame, center_int, (x, y), color, thickness)
+        # Construir polígono cerrado
+        points = np.array([(cx, cy)] + arc_points + [(cx, cy)], dtype=np.int32)
+        pts = points.reshape((-1, 1, 2))
+        
+        cv2.polylines(frame, [pts], isClosed=True, color=color, thickness=thickness)
 
 
 

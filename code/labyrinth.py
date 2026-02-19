@@ -452,3 +452,4 @@ class MorrisPool(Labyrinth):
 		filename = f"results_{self.mace_type}_{self.subject_id}_{self.treatment}.xlsx"
 		wb.save(filename)
 		print(f"Resultados guardados en: {filename}")
+  

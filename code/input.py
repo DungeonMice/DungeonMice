@@ -27,7 +27,7 @@ input3 = {
 }
 
 input4 = MorrisPool(video_path= "../Escopolamina 1.avi", regions= RegionManager([
-							CircularFractionRegion("H", (151, 110), 50, angle_start=0, fraction=0.25),
+							CircularFractionRegion("H", (151, 110), 80, angle_start=270, fraction=0.25),
 							]), 
 							treatment="Escopolamina",
 							subject_id="1",
