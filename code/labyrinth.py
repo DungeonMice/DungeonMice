@@ -1,43 +1,44 @@
 from regions import RegionManager, PolygonRegion, CircleRegion, CircularFractionRegion
 import numpy as np
+import cv2
+import os
 from logic import EventLogic
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 
+
 class Labyrinth:
 	"""
-	Clase abstracta para los diferentes laberintos
+	Clase abstracta para los diferentes laberintos.
 	"""
-	def __init__(self, video_path: str, treatment: str, subject_id: str, mace_type: str, regions: list, min_detection_area: int, hitbox_size: int, start_time: float, end_time: float | None = None) :
-		self.video_path = video_path
-		self.treatment = treatment
-		self.subject_id = subject_id
-		self.mace_type = mace_type
-		self.regions = regions
-		self.start_time = start_time
-		self.end_time = end_time
+	def __init__(self, video_path: str, treatment: str, subject_id: str, mace_type: str,
+				 regions: list, min_detection_area: int, hitbox_size: int,
+				 start_time: float, end_time: float | None = None,
+				 kernel_size=5, blur_size=0):
+
+		self.video_path       = video_path
+		self.treatment        = treatment
+		self.subject_id       = subject_id
+		self.mace_type        = mace_type
+		self.regions          = regions
+		self.start_time       = start_time
+		self.end_time         = end_time
 		self.min_detection_area = min_detection_area
-		self.hitbox_size = hitbox_size
-		self.fps = 0 # Este atributo se llenará al abrir el video, para que esté disponible en toda la clase y no haya que pasarlo como parámetro a cada función.
+		self.hitbox_size      = hitbox_size
+		self.kernel_size      = kernel_size
+		self.blur_size        = blur_size
+		self.fps              = 0  # se llena al abrir el video en RunExperiment
 
 		self._validate_inputs()
 
-		# Regiones y lógica de eventos
-		#self.region_manager = regions
-		#self.logic = EventLogic(self.region_manager)
-
-
-		self.trajectory_x = []
-		self.trajectory_y = []
+		self.trajectory_x    = []
+		self.trajectory_y    = []
 		self.trajectory_time = []
-		
+		self.results         = {}
 
-		# Resultados
-		self.results = {}
-	
-	#--------------------------------------
-	#	Validaciones generales
-	#--------------------------------------
+	# ----------------------------------------------------------------------
+	# Validaciones generales
+	# ----------------------------------------------------------------------
 
 	def _validate_inputs(self):
 		if not isinstance(self.video_path, str):
@@ -67,41 +68,47 @@ class Labyrinth:
 			raise ValueError("hitbox_size debe ser un entero positivo.")
 		if not isinstance(self.fps, int) or self.fps < 0:
 			raise ValueError("fps debe ser un entero positivo.")
-		
+
+	# ----------------------------------------------------------------------
+	# Métodos abstractos — cada subclase debe implementarlos
+	# ----------------------------------------------------------------------
 
 	def process_frame(self, position, time):
-		raise NotImplementedError("La función process_video debe ser implementada por cada tipo específico de laberinto.")
-	
-	def process_video(self):
-		raise NotImplementedError("La función process_video debe ser implementada por cada tipo específico de laberinto.")
+		raise NotImplementedError("process_frame debe ser implementada por cada tipo específico de laberinto.")
 
-	def write_results(self):
-		raise NotImplementedError("La función write_results debe ser implementada por cada tipo específico de laberinto.")
+	def process_video(self, all_results, all_trajectories, all_video_paths, all_first_frames, all_start_times):
+		self.write_results(all_results, all_trajectories, all_video_paths, all_first_frames, all_start_times)
+		raise NotImplementedError("process_video debe ser implementada por cada tipo específico de laberinto.")
+
+	def write_results(self, all_results, all_trajectories, all_video_paths, all_first_frames, all_start_times):
+		raise NotImplementedError("write_results debe ser implementada por cada tipo específico de laberinto.")
+
+	# ----------------------------------------------------------------------
+	# Métodos comunes a todos los laberintos
+	# ----------------------------------------------------------------------
 
 	def get_position(self, position, time):
 		"""
-		Recoje los datos de posición y tiempo para obtenidos en cada frame, y los almacena en listas para su posterior análisis.
+		Recoge los datos de posición y tiempo obtenidos en cada frame
+		y los almacena en listas para su posterior análisis.
 
 		Parámetros
 		----------
-		position : tuple
-			Coordenadas (x, y) del ratón detectado en el frame actual.
+		position : list
+			Lista de coordenadas (x, y) detectadas. Se usa la última posición.
 		time : float
 			Tiempo actual en segundos.
-		
+
 		Retorna
 		-------
 		None
 		"""
 		if len(position) == 0:
-			return # No se detectó posición en este frame, no se agrega nada a la trayectoria	
-		x,y = position[-1]
-		t = time
+			return  # no se detectó posición en este frame
+		x, y = position[-1]
 		self.trajectory_x.append(x)
 		self.trajectory_y.append(y)
-		self.trajectory_time.append(t)
-
-
+		self.trajectory_time.append(time)
 
 	def get_total_distance(self, start_frame=0, end_frame=None):
 		"""
@@ -116,12 +123,11 @@ class Labyrinth:
 			Frame absoluto del video desde el cual empezar (default: 0).
 		end_frame : int or None
 			Frame absoluto del video hasta el cual contar (default: None = hasta el final).
-		
+
 		Retorna
 		-------
 		float
-			Distancia total en píxeles recorrida entre start_frame y end_frame.
-			Retorna 0.0 si no hay suficientes puntos.
+			Distancia total en píxeles. Retorna 0.0 si no hay suficientes puntos.
 		"""
 		trajectory = list(zip(self.trajectory_x, self.trajectory_y))
 
@@ -137,9 +143,7 @@ class Labyrinth:
 			end_frame = max(0, end_frame - recording_start)
 
 		start_frame = max(0, start_frame - recording_start)
-
-		# Limitar a rango válido
-		end_frame = min(len(trajectory), end_frame)
+		end_frame   = min(len(trajectory), end_frame)
 
 		trajectory_filtered = trajectory[start_frame:end_frame]
 
@@ -147,35 +151,274 @@ class Labyrinth:
 		for i in range(1, len(trajectory_filtered)):
 			pt1 = trajectory_filtered[i - 1]
 			pt2 = trajectory_filtered[i]
-			dx = pt2[0] - pt1[0]
-			dy = pt2[1] - pt1[1]
+			dx  = pt2[0] - pt1[0]
+			dy  = pt2[1] - pt1[1]
 			total_distance += np.sqrt(dx * dx + dy * dy)
 
 		return total_distance
 
+	def write_results(self, all_results, all_trajectories, all_video_paths, all_first_frames, all_start_times):
+		"""
+		Esqueleto común para generar Excel y PNGs de trayectoria.
+		Delega el resumen específico a _write_summary() de cada subclase.
+		"""
+		wb = Workbook()
+		wb.remove(wb.active)
+
+		for video_name, events_on_each_region in all_results.items():
+
+			traj_x, traj_y    = all_trajectories[video_name]
+			self.trajectory_x = traj_x
+			self.trajectory_y = traj_y
+			# Restaurar start_time del video correspondiente
+			self.start_time = all_start_times[video_name]
+   
+			ws = wb.create_sheet(title=video_name[:31])
+
+			total_distance       = self.get_total_distance()
+			total_recording_time = len(self.trajectory_x) / self.fps
+
+			# Metadatos — igual para todos
+			self._write_metadata(ws, video_name)
+
+			# Resumen — cada subclase lo implementa diferente
+			self._write_summary(ws, events_on_each_region, total_distance, total_recording_time)
+
+			# Formateo final — igual para todos
+			self._apply_sheet_format(ws)
+
+			# PNG de trayectoria — igual para todos
+			self._save_trajectory_image(
+				video_name, traj_x, traj_y, total_distance,
+				all_first_frames[video_name],
+				os.path.dirname(all_video_paths[video_name])
+			)
+
+		# Guardar Excel en la misma carpeta que los videos
+		output_dir = os.path.dirname(list(all_video_paths.values())[0])
+		filename   = os.path.join(output_dir, f"results_{self.mace_type}_{self.subject_id}_{self.treatment}.xlsx")
+		wb.save(filename)
+		print(f"Resultados guardados en: {filename}")
+
+	def _write_metadata(self, ws, video_name):
+		"""Escribe la sección de metadatos del experimento en la hoja."""
+		meta = [
+			("Sujeto",         self.subject_id),
+			("Tratamiento",    self.treatment),
+			("Laberinto",      self.mace_type),
+			("Video",          video_name),
+			("Start time (s)", self.start_time),
+			("End time (s)",   self.end_time if self.end_time else "Hasta el final"),
+			("FPS",            self.fps),
+		]
+		for row in meta:
+			ws.append(row)
+		ws.append([])  # separador
+
+	def _write_summary(self, ws, events_on_each_region, total_distance, total_recording_time):
+		"""Escribe la sección de resumen. Cada subclase la implementa diferente."""
+		raise NotImplementedError
+
+	def _compute_region_metrics(self, enter_frames, exit_frames, enter_times, total_distance, total_recording_time):
+		"""
+		Calcula las métricas de una región a partir de sus frames de entrada/salida.
+
+		Parámetros
+		----------
+		enter_frames : list
+			Frames absolutos de entrada a la región.
+		exit_frames : list
+			Frames absolutos de salida de la región.
+		enter_times : list of tuples
+			Lista de (enter_time, exit_time) en segundos, proveniente de state.events.
+			Se usa para calcular la latencia con el timestamp real en vez de recalcular
+			desde frame_idx, evitando errores por redondeo de fps.
+		total_distance : float
+			Distancia total recorrida en toda la grabación.
+		total_recording_time : float
+			Duración total de la grabación en segundos.
+
+		Retorna
+		-------
+		dict con: event_list, enter_frames, exit_frames, total_time,
+				total_dist, latency, pct_time, pct_distance
+		"""
+		# Corregir si el sujeto quedó dentro de la región al terminar el video
+		if len(enter_frames) == len(exit_frames) + 1:
+			exit_frames.append(int(self.fps * (self.end_time or total_recording_time + self.start_time)))
+
+		# Duración y distancia por cada evento de entrada/salida
+		event_list = []
+		for i in range(len(enter_frames)):
+			duration = (exit_frames[i] - enter_frames[i]) / self.fps
+			distance = self.get_total_distance(start_frame=enter_frames[i], end_frame=exit_frames[i])
+			event_list.append((duration, distance))
+
+		total_time_in_region     = sum(e[0] for e in event_list)
+		total_distance_in_region = sum(e[1] for e in event_list)
+
+		# Latencia: usar timestamp real del primer ingreso para evitar errores de redondeo de fps
+		latency = (enter_frames[0] / self.fps) - self.start_time if enter_frames else None
+
+		# Porcentaje del tiempo de grabación dentro de la región
+		pct_time = (total_time_in_region / total_recording_time * 100) if total_recording_time > 0 else 0
+
+		# Porcentaje de la distancia total dentro de la región
+		pct_distance = (total_distance_in_region / total_distance * 100) if total_distance > 0 else 0
+
+		return {
+			"event_list"  : event_list,
+			"enter_frames": enter_frames,
+			"exit_frames" : exit_frames,
+			"total_time"  : total_time_in_region,
+			"total_dist"  : total_distance_in_region,
+			"latency"     : latency,
+			"pct_time"    : pct_time,
+			"pct_distance": pct_distance,
+		}
+
+	def _write_event_table(self, ws, metrics):
+		"""
+		Escribe la tabla de detalle por evento con estilos.
+
+		Parámetros
+		----------
+		ws : Worksheet
+			Hoja de Excel donde escribir.
+		metrics : dict
+			Resultado de _compute_region_metrics().
+		"""
+		headers = [
+			"Evento #", "Frame entrada", "Tiempo entrada (s)",
+			"Frame salida", "Tiempo salida (s)",
+			"Duración en región (s)", "Distancia en región (px)",
+		]
+		ws.append(headers)
+
+		# Estilo encabezados: fondo azul, texto blanco, centrado
+		header_row = ws.max_row
+		for col in range(1, len(headers) + 1):
+			cell           = ws.cell(row=header_row, column=col)
+			cell.font      = Font(bold=True, color="FFFFFF")
+			cell.fill      = PatternFill("solid", start_color="2F5496")
+			cell.alignment = Alignment(horizontal="center")
+
+		# Una fila por cada evento de entrada/salida
+		for i, event in enumerate(metrics["event_list"]):
+			ws.append([
+				i + 1,
+				metrics["enter_frames"][i],
+				round(metrics["enter_frames"][i] / self.fps, 3),
+				metrics["exit_frames"][i],
+				round(metrics["exit_frames"][i] / self.fps, 3),
+				round(event[0], 3),   # duración dentro de la región
+				round(event[1], 2),   # distancia dentro de la región
+			])
+
+		# Fila de totales — con fórmulas si hay eventos, con ceros si no hay
+		total_row_data = ["TOTAL", "", "", "", ""]
+		if len(metrics["event_list"]) > 0:
+			first_data_row = header_row + 1
+			last_data_row  = ws.max_row
+			total_row_data += [
+				f"=SUM(F{first_data_row}:F{last_data_row})",  # suma duración
+				f"=SUM(G{first_data_row}:G{last_data_row})",  # suma distancia
+			]
+		else:
+			total_row_data += [0, 0]  # no hay eventos, no hay suma
+
+		ws.append(total_row_data)
+		total_row = ws.max_row
+		for col in range(1, len(headers) + 1):
+			cell      = ws.cell(row=total_row, column=col)
+			cell.font = Font(bold=True)
+			cell.fill = PatternFill("solid", start_color="D9E1F2")
+
+	def _apply_sheet_format(self, ws):
+		"""Aplica formato final a la hoja: centra contenido y ajusta anchos de columna."""
+		# Centrar todo el contenido
+		for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+			for cell in row:
+				cell.alignment = Alignment(horizontal="center")
+
+		# Ancho de columnas
+		col_widths = [10, 16, 20, 14, 18, 24, 26]
+		for i, width in enumerate(col_widths, 1):
+			ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = width
+
+	def _save_trajectory_image(self, video_name, traj_x, traj_y, total_distance, first_frame, output_dir):
+		"""
+		Guarda imagen PNG de la trayectoria completa sobre el primer frame del video.
+
+		Parámetros
+		----------
+		video_name : str
+			Nombre del video (sin extensión), usado para el nombre del archivo.
+		traj_x, traj_y : list
+			Coordenadas de la trayectoria.
+		total_distance : float
+			Distancia total recorrida en píxeles.
+		first_frame : np.ndarray or None
+			Primer frame del video como fondo de la imagen.
+		output_dir : str
+			Carpeta donde guardar el PNG.
+		"""
+		if first_frame is None or len(traj_x) <= 1:
+			return
+
+		background = first_frame.copy()
+		trajectory = list(zip(traj_x, traj_y))
+
+		# Dibujar regiones
+		for region in self.regions.regions:
+			region.draw(background, (0, 255, 0), 2)
+
+		# Dibujar trayectoria completa en magenta
+		for i in range(1, len(trajectory)):
+			cv2.line(background, trajectory[i-1], trajectory[i], (255, 0, 255), 2)
+
+		# Marcar inicio (verde) y fin (rojo)
+		cv2.circle(background, trajectory[0],  8, (0, 255, 0), -1)
+		cv2.circle(background, trajectory[-1], 8, (0, 0, 255), -1)
+
+		# Distancia total en la imagen
+		cv2.putText(background, f"Distancia: {total_distance:.0f} px",
+					(10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+
+		img_path = os.path.join(output_dir, f"trajectory_{video_name}.png")
+		cv2.imwrite(img_path, background)
+		print(f"Imagen guardada en: {img_path}")
+
+
+# ==========================================================================
+# Morris Pool
+# ==========================================================================
 
 class MorrisPool(Labyrinth):
 	"""
-	Clase para los laberientos de Piscina de Morris
-	- Se define una región de un cuarto de circulo (cuadrante) como región de interés, el cuadrante dónde se encuentra la plataforma.
-	- Se requiere obtener la trayectoria del sujeto de experimentación
-	- Se requiere la distancia recorrida dentro y fuera de la región de interés
-	- Se requiere el tiempo dentro del cuadrante de interés (por evento individual ---> entrada y salida, y acumulado total)
+	Clase para el experimento de Piscina de Morris.
+	- Región de interés: un cuarto de círculo (cuadrante) donde se encuentra la plataforma.
+	- Métricas: trayectoria, distancia dentro/fuera de la región, tiempo en el cuadrante
+	  por evento individual y acumulado.
 	"""
 
-	def __init__(self, video_path: str, treatment: str, subject_id: str, regions: list, min_detection_area: int, hitbox_size: int, start_time: float, end_time: float | None = None) :
-		
-		super().__init__(video_path, treatment, subject_id,"MorrisPool", regions, min_detection_area, hitbox_size, start_time , end_time)
+	def __init__(self, video_path: str, treatment: str, subject_id: str, regions: list,
+				 min_detection_area: int, hitbox_size: int, start_time: float,
+				 end_time: float | None = None, kernel_size=5, blur_size=0):
 
+		super().__init__(video_path, treatment, subject_id, "MorrisPool", regions,
+						 min_detection_area, hitbox_size, start_time, end_time,
+						 kernel_size, blur_size)
 
 		self._validate_morris_region()
 		self.enter_frame = []
-		self.exit_frame = []
-		self.event_list = []
+		self.exit_frame  = []
+		self.event_list  = []
 
-	#-------------------------------------------
+	# ----------------------------------------------------------------------
 	# Validaciones específicas para Morris Pool
-	#-------------------------------------------
+	# ----------------------------------------------------------------------
+
 	def _validate_morris_region(self):
 		# 1) Exactamente una región
 		if len(self.regions.regions) != 1:
@@ -183,455 +426,204 @@ class MorrisPool(Labyrinth):
 				"Morris Pool requiere exactamente una región de interés "
 				"(el cuadrante donde estuvo la plataforma)."
 			)
-
 		region = next(iter(self.regions.regions))
 
 		# 2) Tipo correcto
 		if not isinstance(region, CircularFractionRegion):
-			raise ValueError(
-				"La región de Morris Pool debe ser CircularFractionRegion."
-			)
+			raise ValueError("La región de Morris Pool debe ser CircularFractionRegion.")
 
 		# 3) Verificar que sea 1/4 de círculo
-		# Usamos diferencia angular en lugar de confiar en 'fraction'
 		angle_span = (region.angle_end - region.angle_start) % 360
-
 		if not np.isclose(angle_span, 90.0, atol=1e-6):
-			raise ValueError(
-				"La región de Morris Pool debe ser un cuarto de círculo (90°)."
-			)
+			raise ValueError("La región de Morris Pool debe ser un cuarto de círculo (90°).")
 
-	#--------------------------------------
-	# Resultados específicos para Morris Pool
-	#--------------------------------------
+	# ----------------------------------------------------------------------
+	# Procesamiento
+	# ----------------------------------------------------------------------
 
 	def process_frame(self, position, time):
 		"""
-		Procesaun frame a la vez para extraer la trayectoria del sujeto, los eventos de entrada y salida de la región de interés, y calcula la distancia recorrida dentro de la región.
-		
+		Procesa un frame a la vez para extraer la trayectoria del sujeto.
+
 		Parámetros
 		----------
-		position : tuple
-			Coordenadas (x, y) del ratón detectado en el frame actual.
+		position : list
+			Lista de coordenadas (x, y) detectadas en el frame actual.
 		time : float
 			Tiempo actual en segundos.
 
 		Retorna
 		-------
-		None, pero actualiza los atributos de la clase relacionados con la trayectoria.
+		None
 		"""
 		self.get_position(position, time)
-		
 
-
-	def process_video(self, events_on_each_region):
+	def process_video(self, all_results, all_trajectories, all_video_paths, all_first_frames, all_start_times):
 		"""
-		Procesa el video completo para extraer la trayectoria del sujeto, los eventos de entrada y salida de la región de interés, y calcula la distancia recorrida dentro de la región.
-		"""
-		self.get_time_index_in_out_of_region(events_on_each_region)
-		self.get_distance_and_time_inside_region()
-		self.write_results()
-
-	
-	def get_time_index_in_out_of_region(self, events_on_each_region):
-		"""
-		Funcion que obtiene los indices de entrada y salida de la región de interés, a partir de la lista de eventos de cada región.
-
+		Procesa los resultados de todos los videos y genera los outputs finales.
 
 		Parámetros
 		----------
-		time : float
-			Tiempo actual en segundos, este viene del loop principal del experimento, y se usa para verificar si ya se han registrado todos los eventos de entrada y salida antes de calcular la distancia recorrida dentro y fuera de la región.
-		events_on_each_region : dict
-			Es el atributo 'states' de la clase EventLogic, que es un diccionario que mapea region_id -> ZoneState, y cada ZoneState tiene una lista de frames de entrada y salida (enter_frame y exit_frame) que se van llenando a medida que se actualiza la lógica de eventos en cada frame.
-		
-		Retorna
-		-------
-		None, pero actualiza los atributos self.entries_idx y self.exits_idx con las listas de frames de entrada y salida respectivamente, para la región de interés (en este caso, la única región del Morris Pool).
+		all_results : dict
+			{nombre_video: events_on_each_region}
+		all_trajectories : dict
+			{nombre_video: (trajectory_x, trajectory_y)}
+		all_video_paths : dict
+			{nombre_video: ruta_absoluta}
+		all_first_frames : dict
+			{nombre_video: primer_frame}
+		all_start_times : dict
+			{nombre_video: start_time}
 		"""
+		self.write_results(all_results, all_trajectories, all_video_paths, all_first_frames, all_start_times)
 
-		region_id = next(iter(self.regions.regions)).region_id # Solo hay una región en Morris Pool
+	# ----------------------------------------------------------------------
+	# Métodos auxiliares (se mantienen por documentación histórica)
+	# ----------------------------------------------------------------------
+
+	def get_time_index_in_out_of_region(self, events_on_each_region):
+		"""
+		Obtiene los índices de entrada y salida de la región de interés.
+		"""
+		region_id        = next(iter(self.regions.regions)).region_id
 		self.enter_frame = events_on_each_region[region_id].enter_frame
-		self.exit_frame = events_on_each_region[region_id].exit_frame
-
+		self.exit_frame  = events_on_each_region[region_id].exit_frame
 		self.check_enter_exit_frame_lists()
-		
 
 	def check_enter_exit_frame_lists(self):
 		"""
-		Esta función verifica que las listas de frames de entrada y salida tengan la misma longitud, lo cual es necesario para calcular correctamente la distancia recorrida dentro y fuera de la región. Si hay una discrepancia, se emite una advertencia y se intenta corregir agregando una salida al final del video si hay una entrada sin salida correspondiente. Esta función se llama al final del video para asegurarse de que se hayan registrado todos los eventos antes de realizar los cálculos finales.
-
-		Parâmetros
-		----------
-		No tiene parámetros, ya que accede directamente a los atributos de la clase relacionados con los eventos de entrada y salida.
-			- self.entries_idx: Lista de frames de entrada a la región de interés.
-			- self.exits_idx: Lista de frames de salida de la región de interés.
-		Retorna
-		-------
-		No retorna ningún valor, pero modifica las listas de frames de entrada y salida si es necesario para asegurar que tengan la misma longitud, lo cual es crucial para los cálculos posteriores de distancia recorrida dentro y fuera de la región.
-			- Si hay una entrada sin salida correspondiente, se agrega una salida al final del video para corregir la discrepancia.
-			- Si hay más entradas que salidas o viceversa, se emite una advertencia indicando un posible error en la detección o en la lógica de eventos, lo cual debería ser revisado.
-			- Si las listas ya tienen la misma longitud, no se realiza ninguna acción adicional.
+		Verifica que las listas de entrada y salida tengan la misma longitud.
+		Si hay una entrada sin salida, agrega una salida al final del video.
 		"""
 		if len(self.enter_frame) != len(self.exit_frame):
-			print(f"Advertencia: El número de entradas {len(self.enter_frame)} y salidas {len(self.exit_frame)} no coincide.")
+			print(f"Advertencia: entradas {len(self.enter_frame)} y salidas {len(self.exit_frame)} no coinciden.")
 			if len(self.enter_frame) == len(self.exit_frame) + 1:
-				print("Hay una entrada más que salidas. Esto podría indicar que el sujeto entró a la región pero no salió antes de que terminara el video.")
-				self.exit_frame.append(int(self.fps*self.end_time)) # Agregar una salida al final del video
+				print("Hay una entrada más que salidas — se agrega salida al final del video.")
+				self.exit_frame.append(int(self.fps * self.end_time))
 			elif len(self.enter_frame) > len(self.exit_frame):
-				print("Hay más entradas que salidas. Esto podría indicar un error en la detección o que el sujeto entró a la región sin haber salido correctamente. REVISAR LOGICAS")
+				print("Hay más entradas que salidas. REVISAR LÓGICAS.")
 			else:
-				print("Hay más salidas que entradas. Esto podría indicar un error en la detección o que el sujeto salió de la región sin haber entrado correctamente. REVISAR LOGICAS")
+				print("Hay más salidas que entradas. REVISAR LÓGICAS.")
 
 	def get_distance_and_time_inside_region(self):
 		"""
-		Obtiene una lista de todos los eventos individuales de entrada y salida de la región de interés, con su respectiva distancia recorrida dentro de la región y el tiempo dentro de la región para cada evento.
+		Calcula distancia y tiempo dentro de la región para cada evento.
+		"""
+		for i in range(len(self.enter_frame)):
+			self.event_list.append([])
+			self.event_list[i].append((self.exit_frame[i] - self.enter_frame[i]) / self.fps)
+			self.event_list[i].append(self.get_total_distance(
+				start_frame=self.enter_frame[i], end_frame=self.exit_frame[i]))
+
+	# ----------------------------------------------------------------------
+	# Resultados
+	# ----------------------------------------------------------------------
+
+	def _write_summary(self, ws, events_on_each_region, total_distance, total_recording_time):
+		"""Resumen de Morris Pool: una sola región."""
+		region_id    = next(iter(self.regions.regions)).region_id
+		state        = events_on_each_region[region_id]
+		enter_frames = list(state.enter_frame)
+		exit_frames  = list(state.exit_frame)
+		enter_times  = list(state.events)  # lista de (enter_time, exit_time
+		m = self._compute_region_metrics(
+			enter_frames, exit_frames, enter_times,
+			total_distance, total_recording_time
+		)
+		ws.append(["RESUMEN", ""])
+		ws.append(["Nº de entradas a la región",    len(m["enter_frames"])])
+		ws.append(["Tiempo total en región (s)",     round(m["total_time"], 3)])
+		ws.append(["Distancia total recorrida (px)", round(total_distance, 2)])
+		ws.append(["Latencia al primer ingreso (s)", round(m["latency"], 3) if m["latency"] is not None else "No entró"])
+		ws.append(["% tiempo en región",             round(m["pct_time"], 2)])
+		ws.append(["% distancia en región",          round(m["pct_distance"], 2)])
+		ws.append([])
+		self._write_event_table(ws, m)
+
+
+# ==========================================================================
+# Cross Maze
+# ==========================================================================
+
+class CrossMaze(Labyrinth):
+	"""
+	Clase para laberintos en cruz.
+	- Soporta cualquier número de regiones poligonales (brazos).
+	- Métricas por región: latencia, entradas, tiempo, distancia, porcentajes.
+	"""
+
+	def __init__(self, video_path, treatment, subject_id, regions,
+				 min_detection_area, hitbox_size, start_time, end_time=None,
+				 kernel_size=5, blur_size=0):
+
+		super().__init__(video_path, treatment, subject_id, "CrossMaze", regions,
+						 min_detection_area, hitbox_size, start_time, end_time,
+						 kernel_size, blur_size)
+
+		self._validate_cross_maze_regions()
+
+	# ----------------------------------------------------------------------
+	# Validaciones específicas para Cross Maze
+	# ----------------------------------------------------------------------
+
+	def _validate_cross_maze_regions(self):
+		if len(self.regions.regions) < 2:
+			raise ValueError("CrossMaze requiere al menos 2 regiones de interés.")
+		for region in self.regions.regions:
+			if not isinstance(region, PolygonRegion):
+				raise ValueError("Todas las regiones de CrossMaze deben ser PolygonRegion.")
+
+	# ----------------------------------------------------------------------
+	# Procesamiento
+	# ----------------------------------------------------------------------
+
+	def process_frame(self, position, time):
+		self.get_position(position, time)
+
+	def process_video(self, all_results, all_trajectories, all_video_paths, all_first_frames, all_start_times):
+		"""
+		Procesa los resultados de todos los videos y genera los outputs finales.
 
 		Parámetros
 		----------
-		No tiene parámetros, ya que accede directamente a los atributos de la clase relacionados con los eventos de entrada y salida, así como a la trayectoria registrada durante el experimento.
-			- self.enter_frame: Lista de frames de entrada a la región de interés.
-			- self.exit_frame: Lista de frames de salida de la región de interés.
-			- self.trajectory_x y self.trajectory_y: Listas de coordenadas x e y de la trayectoria del sujeto a lo largo del tiempo, registradas durante el experimento.
-
-		Retorna
-		-------
-		event_list : list of lists
-			Una lista donde cada elemento es una sublista que contiene:
-				- Tiempo dentro de la región para ese evento (en segundos).
-				- Distancia recorrida dentro de la región para ese evento (en píxeles).
+		all_results : dict
+			{nombre_video: events_on_each_region}
+		all_trajectories : dict
+			{nombre_video: (trajectory_x, trajectory_y)}
+		all_video_paths : dict
+			{nombre_video: ruta_absoluta}
+		all_first_frames : dict
+			{nombre_video: primer_frame}
 		"""
+		self.write_results(all_results, all_trajectories, all_video_paths, all_first_frames, all_start_times)
 
-		
-		for i in range(len(self.enter_frame)):
-			self.event_list.append([])
-			self.event_list[i].append((self.exit_frame[i] - self.enter_frame[i])/self.fps) # agrego el tiempo dentro de la region	
-			self.event_list[i].append( self.get_total_distance(start_frame=self.enter_frame[i], end_frame=self.exit_frame[i])) # agrego la distancia recorrida dentro de la region
-	
+	# ----------------------------------------------------------------------
+	# Resultados
+	# ----------------------------------------------------------------------
 
-	def write_results(self):
-		"""
-		Genera un archivo Excel con los resultados del experimento de Morris Pool.
-
-		El archivo contiene tres secciones:
-		- Metadatos: información del sujeto, tratamiento, laberinto y parámetros de grabación.
-		- Resumen: métricas globales del experimento (entradas, tiempos, distancias, latencia, porcentajes).
-		- Detalle por evento: tabla con cada entrada/salida individual a la región de interés,
-		incluyendo frames, tiempos, duración y distancia recorrida dentro de la región.
-
-		El archivo se guarda en el directorio de trabajo con el nombre:
-			results_{mace_type}_{subject_id}_{treatment}.xlsx
-
-		Retorna
-		-------
-		None
-		"""
-		
-		# ------------------------------------------------------------------
-		# Cálculos previos a escribir resultados
-		# ------------------------------------------------------------------
-
-		# Tiempo total que el sujeto pasó dentro de la región (suma de todos los eventos)
-		total_time_in_region = sum(e[0] for e in self.event_list)
-
-		# Distancia total recorrida durante toda la grabación
-		total_distance = self.get_total_distance()
-
-		# Duración total de la grabación en segundos
-		total_recording_time = len(self.trajectory_x) / self.fps
-
-		# Latencia: segundos desde start_recording hasta el primer ingreso a la región
-		latency = (self.enter_frame[0] / self.fps) - self.start_time if self.enter_frame else None
-
-		# Porcentaje del tiempo de grabación que el sujeto pasó en la región
-		pct_time = (total_time_in_region / total_recording_time * 100) if total_recording_time > 0 else 0
-
-		# Porcentaje de la distancia total recorrida que ocurrió dentro de la región
-		total_distance_in_region = sum(e[1] for e in self.event_list)
-		pct_distance = (total_distance_in_region / total_distance * 100) if total_distance > 0 else 0
-
-		# ------------------------------------------------------------------
-		# Crear workbook
-		# ------------------------------------------------------------------
-		wb = Workbook()
-		ws = wb.active
-		ws.title = "Resultados"
-
-		# ------------------------------------------------------------------
-		# Sección 1: Metadatos del experimento
-		# ------------------------------------------------------------------
-		meta = [
-			("Sujeto",         self.subject_id),
-			("Tratamiento",    self.treatment),
-			("Laberinto",      self.mace_type),
-			("Start time (s)", self.start_time),
-			("End time (s)",   self.end_time if self.end_time else "Hasta el final"),
-			("FPS",            self.fps),
-		]
-		for row in meta:
-			ws.append(row)
-
-		ws.append([])  # separador
-
-		# ------------------------------------------------------------------
-		# Sección 2: Resumen global
-		# ------------------------------------------------------------------
-		ws.append(["RESUMEN", ""])
-		ws.append(["Nº de entradas a la región",    len(self.enter_frame)])
-		ws.append(["Tiempo total en región (s)",     round(total_time_in_region, 3)])
+	def _write_summary(self, ws, events_on_each_region, total_distance, total_recording_time):
+		"""Resumen de CrossMaze: una sección por región."""
+		ws.append(["RESUMEN GLOBAL", ""])
 		ws.append(["Distancia total recorrida (px)", round(total_distance, 2)])
-		ws.append(["Latencia al primer ingreso (s)", round(latency, 3) if latency is not None else "No entró"])
-		ws.append(["% tiempo en región",             round(pct_time, 2)])
-		ws.append(["% distancia en región",          round(pct_distance, 2)])
+		ws.append(["Duración total grabación (s)",   round(len(self.trajectory_x) / self.fps, 3)])
+		ws.append([])
 
-		ws.append([])  # separador
-
-		# ------------------------------------------------------------------
-		# Sección 3: Detalle por evento (una fila por entrada/salida)
-		# ------------------------------------------------------------------
-		headers = [
-			"Evento #",
-			"Frame entrada",
-			"Tiempo entrada (s)",
-			"Frame salida",
-			"Tiempo salida (s)",
-			"Duración en región (s)",
-			"Distancia en región (px)",
-		]
-		ws.append(headers)
-
-		# Estilo de encabezados: fondo azul, texto blanco, centrado
-		header_row = ws.max_row
-		for col in range(1, len(headers) + 1):
-			cell = ws.cell(row=header_row, column=col)
-			cell.font = Font(bold=True, color="FFFFFF")
-			cell.fill = PatternFill("solid", start_color="2F5496")
-			cell.alignment = Alignment(horizontal="center")
-
-		# Una fila por cada evento de entrada/salida
-		for i, event in enumerate(self.event_list):
-			ws.append([
-				i + 1,
-				self.enter_frame[i],
-				round(self.enter_frame[i] / self.fps, 3),
-				self.exit_frame[i],
-				round(self.exit_frame[i] / self.fps, 3),
-				round(event[0], 3),   # duración dentro de la región
-				round(event[1], 2),   # distancia dentro de la región
-			])
-
-		# Fila de totales con fórmulas Excel (se recalculan al abrir el archivo)
-		first_data_row = header_row + 1
-		last_data_row = ws.max_row
-		ws.append([
-			"TOTAL", "", "", "", "",
-			f"=SUM(F{first_data_row}:F{last_data_row})",
-			f"=SUM(G{first_data_row}:G{last_data_row})",
-		])
-		total_row = ws.max_row
-		for col in range(1, len(headers) + 1):
-			cell = ws.cell(row=total_row, column=col)
-			cell.font = Font(bold=True)
-			cell.fill = PatternFill("solid", start_color="D9E1F2")
-
-		# --- Centrar todo el contenido ---
-		for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
-			for cell in row:
-				cell.alignment = Alignment(horizontal="center")
-        
-		# ------------------------------------------------------------------
-		# Formato: ancho de columnas
-		# ------------------------------------------------------------------
-		col_widths = [10, 16, 20, 14, 18, 24, 26]
-		for i, width in enumerate(col_widths, 1):
-			ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = width
-
-		# ------------------------------------------------------------------
-		# Guardar archivo
-		# ------------------------------------------------------------------
-		filename = f"results_{self.mace_type}_{self.subject_id}_{self.treatment}.xlsx"
-		wb.save(filename)
-		print(f"Resultados guardados en: {filename}")
-  
-class CrossMaze(Labyrinth):
-    """
-    Clase para laberintos en cruz.
-    - Soporta cualquier número de regiones poligonales (brazos).
-    - Métricas por región: latencia, entradas, tiempo, distancia, porcentajes.
-    """
-
-    def __init__(self, video_path, treatment, subject_id, regions,
-                 min_detection_area, hitbox_size, start_time, end_time=None):
-
-        super().__init__(video_path, treatment, subject_id, "CrossMaze",
-                         regions, min_detection_area, hitbox_size, start_time, end_time)
-
-        self._validate_cross_maze_regions()
-
-    def _validate_cross_maze_regions(self):
-        if len(self.regions.regions) < 2:
-            raise ValueError("CrossMaze requiere al menos 2 regiones de interés.") # De momento, luego preguntar si se quiere exigir exactamente otra cantidad de regiones como minimo.
-        for region in self.regions.regions:
-            if not isinstance(region, PolygonRegion):
-                raise ValueError("Todas las regiones de CrossMaze deben ser PolygonRegion.")
-
-    def process_frame(self, position, time):
-        self.get_position(position, time)
-
-    def process_video(self, events_on_each_region):
-        self.write_results(events_on_each_region)
-
-    def write_results(self, events_on_each_region):
-        """
-        Genera un archivo Excel con los resultados del experimento CrossMaze.
-
-        Contiene:
-        - Metadatos del experimento.
-        - Resumen global: distancia total y duración total de grabación.
-        - Por cada región: resumen (latencia, entradas, tiempo, distancia, porcentajes)
-          y tabla de detalle por evento.
-
-        Parámetros
-        ----------
-        events_on_each_region : dict
-            Atributo 'states' de EventLogic — mapea region_id -> ZoneState.
-        """
-        # ------------------------------------------------------------------
-        # Cálculos globales
-        # ------------------------------------------------------------------
-        total_distance = self.get_total_distance()
-        total_recording_time = len(self.trajectory_x) / self.fps
-
-        # ------------------------------------------------------------------
-        # Crear workbook
-        # ------------------------------------------------------------------
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Resultados"
-
-        # ------------------------------------------------------------------
-        # Sección 1: Metadatos
-        # ------------------------------------------------------------------
-        meta = [
-            ("Sujeto",         self.subject_id),
-            ("Tratamiento",    self.treatment),
-            ("Laberinto",      self.mace_type),
-            ("Start time (s)", self.start_time),
-            ("End time (s)",   self.end_time if self.end_time else "Hasta el final"),
-            ("FPS",            self.fps),
-        ]
-        for row in meta:
-            ws.append(row)
-        ws.append([])
-
-        # ------------------------------------------------------------------
-        # Sección 2: Resumen global
-        # ------------------------------------------------------------------
-        ws.append(["RESUMEN GLOBAL", ""])
-        ws.append(["Distancia total recorrida (px)", round(total_distance, 2)])
-        ws.append(["Duración total grabación (s)",   round(total_recording_time, 3)])
-        ws.append([])
-
-        # ------------------------------------------------------------------
-        # Sección 3: Por cada región
-        # ------------------------------------------------------------------
-        for region in self.regions.regions:
-            region_id = region.region_id
-            state = events_on_each_region[region_id]
-
-            enter_frames = state.enter_frame
-            exit_frames  = state.exit_frame
-
-            # Verificar listas de entrada/salida
-            if len(enter_frames) == len(exit_frames) + 1:
-                exit_frames.append(int(self.fps * (self.end_time or total_recording_time + self.start_time)))
-
-            # Calcular métricas de esta región
-            event_list = []
-            for i in range(len(enter_frames)):
-                duration = (exit_frames[i] - enter_frames[i]) / self.fps
-                distance = self.get_total_distance(start_frame=enter_frames[i], end_frame=exit_frames[i])
-                event_list.append((duration, distance))
-
-            total_time_in_region     = sum(e[0] for e in event_list)
-            total_distance_in_region = sum(e[1] for e in event_list)
-            latency = (enter_frames[0] / self.fps) - self.start_time if enter_frames else None
-            pct_time     = (total_time_in_region / total_recording_time * 100)     if total_recording_time > 0 else 0
-            pct_distance = (total_distance_in_region / total_distance * 100) if total_distance > 0 else 0
-
-            # --- Resumen de esta región ---
-            ws.append([f"REGIÓN: {region_id}", ""])
-            ws.append(["Nº de entradas",                len(enter_frames)])
-            ws.append(["Tiempo total en región (s)",     round(total_time_in_region, 3)])
-            ws.append(["Distancia en región (px)",       round(total_distance_in_region, 2)])
-            ws.append(["Latencia al primer ingreso (s)", round(latency, 3) if latency is not None else "No entró"])
-            ws.append(["% tiempo en región",             round(pct_time, 2)])
-            ws.append(["% distancia en región",          round(pct_distance, 2)])
-            ws.append([])
-
-            # --- Tabla de detalle por evento ---
-            headers = [
-                "Evento #",
-                "Frame entrada",
-                "Tiempo entrada (s)",
-                "Frame salida",
-                "Tiempo salida (s)",
-                "Duración en región (s)",
-                "Distancia en región (px)",
-            ]
-            ws.append(headers)
-
-            header_row = ws.max_row
-            for col in range(1, len(headers) + 1):
-                cell = ws.cell(row=header_row, column=col)
-                cell.font      = Font(bold=True, color="FFFFFF")
-                cell.fill      = PatternFill("solid", start_color="2F5496")
-                cell.alignment = Alignment(horizontal="center")
-
-            for i, event in enumerate(event_list):
-                ws.append([
-                    i + 1,
-                    enter_frames[i],
-                    round(enter_frames[i] / self.fps, 3),
-                    exit_frames[i],
-                    round(exit_frames[i] / self.fps, 3),
-                    round(event[0], 3),
-                    round(event[1], 2),
-                ])
-
-            # Fila de totales
-            first_data_row = header_row + 1
-            last_data_row  = ws.max_row
-            ws.append([
-                "TOTAL", "", "", "", "",
-                f"=SUM(F{first_data_row}:F{last_data_row})",
-                f"=SUM(G{first_data_row}:G{last_data_row})",
-            ])
-            total_row = ws.max_row
-            for col in range(1, len(headers) + 1):
-                cell = ws.cell(row=total_row, column=col)
-                cell.font = Font(bold=True)
-                cell.fill = PatternFill("solid", start_color="D9E1F2")
-
-            ws.append([])  # separador entre regiones
-
-        # ------------------------------------------------------------------
-        # Centrar todo
-        # ------------------------------------------------------------------
-        for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
-            for cell in row:
-                cell.alignment = Alignment(horizontal="center")
-
-        # ------------------------------------------------------------------
-        # Ancho de columnas
-        # ------------------------------------------------------------------
-        col_widths = [10, 16, 20, 14, 18, 24, 26]
-        for i, width in enumerate(col_widths, 1):
-            ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = width
-
-        # ------------------------------------------------------------------
-        # Guardar
-        # ------------------------------------------------------------------
-        filename = f"results_{self.mace_type}_{self.subject_id}_{self.treatment}.xlsx"
-        wb.save(filename)
-        print(f"Resultados guardados en: {filename}")
+		for region in self.regions.regions:
+			state = events_on_each_region[region.region_id]
+			enter_frames = list(state.enter_frame)
+			exit_frames  = list(state.exit_frame)
+			enter_times  = list(state.events)  # lista de (enter_time, exit_time)
+			m = self._compute_region_metrics(
+						enter_frames, exit_frames, enter_times,
+						total_distance, len(self.trajectory_x) / self.fps
+					)
+			ws.append([f"REGIÓN: {region.region_id}", ""])
+			ws.append(["Nº de entradas",                len(m["enter_frames"])])
+			ws.append(["Tiempo total en región (s)",     round(m["total_time"], 3)])
+			ws.append(["Distancia en región (px)",       round(m["total_dist"], 2)])
+			ws.append(["Latencia al primer ingreso (s)", round(m["latency"], 3) if m["latency"] is not None else "No entró"])
+			ws.append(["% tiempo en región",             round(m["pct_time"], 2)])
+			ws.append(["% distancia en región",          round(m["pct_distance"], 2)])
+			ws.append([])
+			self._write_event_table(ws, m)
+			ws.append([])  # separador entre regiones

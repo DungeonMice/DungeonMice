@@ -2,16 +2,20 @@ from labyrinth import MorrisPool, CrossMaze
 from regions import RegionManager, PolygonRegion, CircleRegion, CircularFractionRegion
 
 input1 = CrossMaze(
-    video_path="../Mice maze experiment.mp4",
+    video_path="../CrossMaze",
     treatment="Control",
     subject_id="1",
     regions=RegionManager([
-        PolygonRegion("este",  [[620,450],[903,450],[900,320],[622,320]]),
-        PolygonRegion("oeste", [[272,450],[274,320],[566,320],[562,450]])
+        PolygonRegion("este",  [[630,420],[893,420],[893,350],[630,350]]),
+        PolygonRegion("oeste", [[288,420],[288,350],[550,350],[550,420]]),
+        PolygonRegion("norte", [[555,350],[625,350],[625,87],[555,87]]),
+        PolygonRegion("sur", [[555,683],[625,683],[625,420],[555,420]])
     ]),
     min_detection_area=2000,
     hitbox_size=40,
-    start_time=5
+    start_time=25,
+    kernel_size=15,
+    blur_size=9 # debe ser impar: 7, 11, 15, 21
 )
 
 input2 = {
@@ -30,11 +34,14 @@ input3 = {
 	
 }
 
-input4 = MorrisPool(video_path= "../Escopolamina 1.avi", regions= RegionManager([
+input4 = MorrisPool(video_path= "../MorrisPool", regions= RegionManager([
 							CircularFractionRegion("H", (151, 110), 80, angle_start=270, fraction=0.25),
 							]), 
 							treatment="Escopolamina",
 							subject_id="1",
 							min_detection_area=100, 
-							hitbox_size=10, 
-							start_time=5)
+							hitbox_size=10,
+							start_time=5,
+       						kernel_size=5,
+    						blur_size=0
+    						)
