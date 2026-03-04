@@ -133,7 +133,7 @@ def process_single_video(video_path, labyrinth):
         cv2.imshow("fgmask", fgmask)
 
         # Salir con ESC
-        if cv2.waitKey(1) & 0xFF == 27:
+        if cv2.waitKey(1) & 0xFF == 27: 
             break
 
     cap.release()

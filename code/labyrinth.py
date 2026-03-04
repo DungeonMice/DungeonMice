@@ -6,7 +6,6 @@ from logic import EventLogic
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 
-
 class Labyrinth:
 	"""
 	Clase abstracta para los diferentes laberintos.
@@ -79,9 +78,6 @@ class Labyrinth:
 	def process_video(self, all_results, all_trajectories, all_video_paths, all_first_frames, all_start_times):
 		self.write_results(all_results, all_trajectories, all_video_paths, all_first_frames, all_start_times)
 		raise NotImplementedError("process_video debe ser implementada por cada tipo específico de laberinto.")
-
-	def write_results(self, all_results, all_trajectories, all_video_paths, all_first_frames, all_start_times):
-		raise NotImplementedError("write_results debe ser implementada por cada tipo específico de laberinto.")
 
 	# ----------------------------------------------------------------------
 	# Métodos comunes a todos los laberintos
@@ -179,20 +175,25 @@ class Labyrinth:
 			total_recording_time = len(self.trajectory_x) / self.fps
 
 			# Metadatos — igual para todos
-			self._write_metadata(ws, video_name)
+			self.write_metadata(ws, video_name)
 
 			# Resumen — cada subclase lo implementa diferente
-			self._write_summary(ws, events_on_each_region, total_distance, total_recording_time)
+			self.write_summary(ws, events_on_each_region, total_distance, total_recording_time)
 
 			# Formateo final — igual para todos
-			self._apply_sheet_format(ws)
+			self.apply_sheet_format(ws)
 
 			# PNG de trayectoria — igual para todos
-			self._save_trajectory_image(
+			self.save_trajectory_image(
 				video_name, traj_x, traj_y, total_distance,
 				all_first_frames[video_name],
 				os.path.dirname(all_video_paths[video_name])
 			)
+
+		# Imágenes combinadas — fuera del loop
+		output_dir = os.path.dirname(list(all_video_paths.values())[0])
+		first_frame = next((f for f in all_first_frames.values() if f is not None), None)
+		self.save_heatmap_image(all_trajectories, first_frame, output_dir)
 
 		# Guardar Excel en la misma carpeta que los videos
 		output_dir = os.path.dirname(list(all_video_paths.values())[0])
@@ -200,7 +201,7 @@ class Labyrinth:
 		wb.save(filename)
 		print(f"Resultados guardados en: {filename}")
 
-	def _write_metadata(self, ws, video_name):
+	def write_metadata(self, ws, video_name):
 		"""Escribe la sección de metadatos del experimento en la hoja."""
 		meta = [
 			("Sujeto",         self.subject_id),
@@ -215,11 +216,11 @@ class Labyrinth:
 			ws.append(row)
 		ws.append([])  # separador
 
-	def _write_summary(self, ws, events_on_each_region, total_distance, total_recording_time):
+	def write_summary(self, ws, events_on_each_region, total_distance, total_recording_time):
 		"""Escribe la sección de resumen. Cada subclase la implementa diferente."""
 		raise NotImplementedError
 
-	def _compute_region_metrics(self, enter_frames, exit_frames, enter_times, total_distance, total_recording_time):
+	def compute_region_metrics(self, enter_frames, exit_frames, enter_times, total_distance, total_recording_time):
 		"""
 		Calcula las métricas de una región a partir de sus frames de entrada/salida.
 
@@ -277,7 +278,7 @@ class Labyrinth:
 			"pct_distance": pct_distance,
 		}
 
-	def _write_event_table(self, ws, metrics):
+	def write_event_table(self, ws, metrics):
 		"""
 		Escribe la tabla de detalle por evento con estilos.
 
@@ -334,7 +335,7 @@ class Labyrinth:
 			cell.font = Font(bold=True)
 			cell.fill = PatternFill("solid", start_color="D9E1F2")
 
-	def _apply_sheet_format(self, ws):
+	def apply_sheet_format(self, ws):
 		"""Aplica formato final a la hoja: centra contenido y ajusta anchos de columna."""
 		# Centrar todo el contenido
 		for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
@@ -346,7 +347,7 @@ class Labyrinth:
 		for i, width in enumerate(col_widths, 1):
 			ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = width
 
-	def _save_trajectory_image(self, video_name, traj_x, traj_y, total_distance, first_frame, output_dir):
+	def save_trajectory_image(self, video_name, traj_x, traj_y, total_distance, first_frame, output_dir):
 		"""
 		Guarda imagen PNG de la trayectoria completa sobre el primer frame del video.
 
@@ -377,10 +378,6 @@ class Labyrinth:
 		for i in range(1, len(trajectory)):
 			cv2.line(background, trajectory[i-1], trajectory[i], (255, 0, 255), 2)
 
-		# Marcar inicio (verde) y fin (rojo)
-		cv2.circle(background, trajectory[0],  8, (0, 255, 0), -1)
-		cv2.circle(background, trajectory[-1], 8, (0, 0, 255), -1)
-
 		# Distancia total en la imagen
 		cv2.putText(background, f"Distancia: {total_distance:.0f} px",
 					(10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
@@ -388,6 +385,72 @@ class Labyrinth:
 		img_path = os.path.join(output_dir, f"trajectory_{video_name}.png")
 		cv2.imwrite(img_path, background)
 		print(f"Imagen guardada en: {img_path}")
+  
+	def make_black_canvas(self, first_frame):
+		"""
+		Crea un canvas negro del mismo tamaño que first_frame.
+		Retorna (canvas, height, width).
+		"""
+		if first_frame is not None:
+			height, width = first_frame.shape[:2]
+		else:
+			height, width = 600, 800  # fallback genérico
+		canvas = np.zeros((height, width, 3), dtype=np.uint8)
+		return canvas, height, width
+
+	def draw_arena_outline(self, canvas):
+		"""
+		Dibuja el contorno del área experimental sobre el canvas.
+		- Morris Pool: círculo completo de la piscina (en gris oscuro como fondo de arena).
+		- Cross Maze: no dibuja nada extra (el contorno son las regiones).
+		"""
+		pass  # la subclase MorrisPool sobreescribe este método
+
+	def save_heatmap_image(self, all_trajectories, first_frame, output_dir):
+		"""
+		Genera un mapa de calor combinando todas las trayectorias sobre fondo negro.
+
+		Las intersecciones y zonas más recorridas aparecen en rojo/amarillo (caliente),
+		las menos transitadas en azul/verde (frío). Fondo negro = sin actividad.
+		"""
+		canvas, height, width = self.make_black_canvas(first_frame)
+
+		# Dibujar el área experimental de fondo (solo Morris Pool lo implementa)
+		self.draw_arena_outline(canvas)
+
+		# Acumular densidad por segmentos de trayectoria
+		density = np.zeros((height, width), dtype=np.float32)
+		for traj_x, traj_y in all_trajectories.values():
+			if len(traj_x) <= 1:
+				continue
+			trajectory = list(zip(traj_x, traj_y))
+			for j in range(1, len(trajectory)):
+				cv2.line(density, trajectory[j-1], trajectory[j], color=1.0, thickness=2)
+
+		if density.max() == 0:
+			print("No hay trayectorias para generar heatmap.")
+			return
+
+		# Suavizar ligeramente para suavizar bordes sin difuminar la densidad real
+		density = cv2.GaussianBlur(density, (11, 11), 0)
+
+		# Normalizar a 0-255 de forma lineal — preserva las diferencias reales de densidad
+		density_norm = cv2.normalize(density, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+
+		# Aplicar colormap JET (azul=frío → rojo=caliente)
+		heatmap_color = cv2.applyColorMap(density_norm, cv2.COLORMAP_JET)
+
+		# Solo pintar píxeles con actividad real (fondo negro donde no hay trayectoria)
+		mask = density_norm > 0
+		canvas[mask] = heatmap_color[mask]
+
+		# Dibujar regiones en blanco encima del heatmap
+		for region in self.regions.regions:
+			region.draw(canvas, (255, 255, 255), 2)
+
+		img_path = os.path.join(output_dir, f"heatmap_{self.mace_type}_{self.subject_id}_{self.treatment}.png")
+		cv2.imwrite(img_path, canvas)
+		print(f"Mapa de calor guardado en: {img_path}")
 
 
 # ==========================================================================
@@ -410,7 +473,7 @@ class MorrisPool(Labyrinth):
 						 min_detection_area, hitbox_size, start_time, end_time,
 						 kernel_size, blur_size)
 
-		self._validate_morris_region()
+		self.validate_morris_region()
 		self.enter_frame = []
 		self.exit_frame  = []
 		self.event_list  = []
@@ -419,7 +482,7 @@ class MorrisPool(Labyrinth):
 	# Validaciones específicas para Morris Pool
 	# ----------------------------------------------------------------------
 
-	def _validate_morris_region(self):
+	def validate_morris_region(self):
 		# 1) Exactamente una región
 		if len(self.regions.regions) != 1:
 			raise ValueError(
@@ -436,6 +499,98 @@ class MorrisPool(Labyrinth):
 		angle_span = (region.angle_end - region.angle_start) % 360
 		if not np.isclose(angle_span, 90.0, atol=1e-6):
 			raise ValueError("La región de Morris Pool debe ser un cuarto de círculo (90°).")
+
+	# ----------------------------------------------------------------------
+	# Visualización específica: círculo de la piscina como fondo
+	# ----------------------------------------------------------------------
+
+	def draw_arena_outline(self, canvas):
+		"""
+		Dibuja el círculo completo de la piscina en gris oscuro sobre el canvas.
+		Usa el centro y radio de la única región CircularFractionRegion definida.
+		"""
+		region = next(iter(self.regions.regions))
+		center = tuple(map(int, region.center))
+		radius = int(region.radius)
+		cv2.circle(canvas, center, radius, (40, 40, 40), -1)
+		cv2.circle(canvas, center, radius, (180, 180, 180), 2)
+
+	def save_heatmap_image(self, all_trajectories, first_frame, output_dir):
+		"""
+		Heatmap específico para Morris Pool:
+		- El calor queda recortado dentro del círculo de la piscina.
+		- Se dibuja una barra de escala de temperatura (frío→caliente).
+		- Fondo negro fuera del círculo.
+		"""
+		canvas, height, width = self.make_black_canvas(first_frame)
+
+		region = next(iter(self.regions.regions))
+		center = tuple(map(int, region.center))
+		radius = int(region.radius)
+
+		# Acumular densidad
+		density = np.zeros((height, width), dtype=np.float32)
+		for traj_x, traj_y in all_trajectories.values():
+			if len(traj_x) <= 1:
+				continue
+			trajectory = list(zip(traj_x, traj_y))
+			for j in range(1, len(trajectory)):
+				cv2.line(density, trajectory[j-1], trajectory[j], color=1.0, thickness=2)
+
+		if density.max() == 0:
+			print("No hay trayectorias para generar heatmap.")
+			return
+
+		density = cv2.GaussianBlur(density, (11, 11), 0)
+		density_norm = cv2.normalize(density, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+		heatmap_color = cv2.applyColorMap(density_norm, cv2.COLORMAP_JET)
+
+		# Máscara circular — solo pintar dentro de la piscina
+		circle_mask = np.zeros((height, width), dtype=np.uint8)
+		cv2.circle(circle_mask, center, radius, 255, -1)
+
+		# Fondo gris oscuro dentro del círculo, negro fuera
+		cv2.circle(canvas, center, radius, (40, 40, 40), -1)
+
+		# Aplicar heatmap solo donde hay densidad Y dentro del círculo
+		heat_mask = (density_norm > 0) & (circle_mask == 255)
+		canvas[heat_mask] = heatmap_color[heat_mask]
+
+		# Contorno de la piscina y cuadrante en blanco
+		cv2.circle(canvas, center, radius, (255, 255, 255), 2)
+		for reg in self.regions.regions:
+			reg.draw(canvas, (255, 255, 255), 2)
+
+		# --- Barra de escala de temperatura ---
+		bar_x      = width - 30    # posición horizontal de la barra
+		bar_y_top  = 20            # margen superior
+		bar_height = height - 40   # altura de la barra
+		bar_width  = 18
+
+		# Gradiente vertical de 0 (frío, abajo) a 255 (caliente, arriba)
+		for i in range(bar_height):
+			value     = int(255 * (1.0 - i / bar_height))  # arriba=caliente
+			color_bar = cv2.applyColorMap(np.array([[value]], dtype=np.uint8), cv2.COLORMAP_JET)[0][0]
+			cv2.rectangle(
+				canvas,
+				(bar_x, bar_y_top + i),
+				(bar_x + bar_width, bar_y_top + i + 1),
+				color_bar.tolist(), -1
+			)
+
+		# Borde de la barra
+		cv2.rectangle(canvas, (bar_x, bar_y_top), (bar_x + bar_width, bar_y_top + bar_height), (255, 255, 255), 1)
+
+		# Etiquetas "Alto" y "Bajo"
+		font       = cv2.FONT_HERSHEY_SIMPLEX
+		font_scale = 0.45
+		thickness  = 1
+		cv2.putText(canvas, "Alto", (bar_x - 2, bar_y_top - 5),       font, font_scale, (255, 255, 255), thickness)
+		cv2.putText(canvas, "Bajo", (bar_x - 2, bar_y_top + bar_height + 14), font, font_scale, (255, 255, 255), thickness)
+
+		img_path = os.path.join(output_dir, f"heatmap_{self.mace_type}_{self.subject_id}_{self.treatment}.png")
+		cv2.imwrite(img_path, canvas)
+		print(f"Mapa de calor guardado en: {img_path}")
 
 	# ----------------------------------------------------------------------
 	# Procesamiento
@@ -519,14 +674,14 @@ class MorrisPool(Labyrinth):
 	# Resultados
 	# ----------------------------------------------------------------------
 
-	def _write_summary(self, ws, events_on_each_region, total_distance, total_recording_time):
+	def write_summary(self, ws, events_on_each_region, total_distance, total_recording_time):
 		"""Resumen de Morris Pool: una sola región."""
 		region_id    = next(iter(self.regions.regions)).region_id
 		state        = events_on_each_region[region_id]
 		enter_frames = list(state.enter_frame)
 		exit_frames  = list(state.exit_frame)
 		enter_times  = list(state.events)  # lista de (enter_time, exit_time
-		m = self._compute_region_metrics(
+		m = self.compute_region_metrics(
 			enter_frames, exit_frames, enter_times,
 			total_distance, total_recording_time
 		)
@@ -538,8 +693,7 @@ class MorrisPool(Labyrinth):
 		ws.append(["% tiempo en región",             round(m["pct_time"], 2)])
 		ws.append(["% distancia en región",          round(m["pct_distance"], 2)])
 		ws.append([])
-		self._write_event_table(ws, m)
-
+		self.write_event_table(ws, m)
 
 # ==========================================================================
 # Cross Maze
@@ -560,13 +714,13 @@ class CrossMaze(Labyrinth):
 						 min_detection_area, hitbox_size, start_time, end_time,
 						 kernel_size, blur_size)
 
-		self._validate_cross_maze_regions()
+		self.validate_cross_maze_regions()
 
 	# ----------------------------------------------------------------------
 	# Validaciones específicas para Cross Maze
 	# ----------------------------------------------------------------------
 
-	def _validate_cross_maze_regions(self):
+	def validate_cross_maze_regions(self):
 		if len(self.regions.regions) < 2:
 			raise ValueError("CrossMaze requiere al menos 2 regiones de interés.")
 		for region in self.regions.regions:
@@ -601,7 +755,7 @@ class CrossMaze(Labyrinth):
 	# Resultados
 	# ----------------------------------------------------------------------
 
-	def _write_summary(self, ws, events_on_each_region, total_distance, total_recording_time):
+	def write_summary(self, ws, events_on_each_region, total_distance, total_recording_time):
 		"""Resumen de CrossMaze: una sección por región."""
 		ws.append(["RESUMEN GLOBAL", ""])
 		ws.append(["Distancia total recorrida (px)", round(total_distance, 2)])
@@ -613,7 +767,7 @@ class CrossMaze(Labyrinth):
 			enter_frames = list(state.enter_frame)
 			exit_frames  = list(state.exit_frame)
 			enter_times  = list(state.events)  # lista de (enter_time, exit_time)
-			m = self._compute_region_metrics(
+			m = self.compute_region_metrics(
 						enter_frames, exit_frames, enter_times,
 						total_distance, len(self.trajectory_x) / self.fps
 					)
@@ -625,5 +779,5 @@ class CrossMaze(Labyrinth):
 			ws.append(["% tiempo en región",             round(m["pct_time"], 2)])
 			ws.append(["% distancia en región",          round(m["pct_distance"], 2)])
 			ws.append([])
-			self._write_event_table(ws, m)
+			self.write_event_table(ws, m)
 			ws.append([])  # separador entre regiones
