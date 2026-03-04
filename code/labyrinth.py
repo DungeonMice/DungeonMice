@@ -6,6 +6,7 @@ from logic import EventLogic
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 
+
 class Labyrinth:
 	"""
 	Clase abstracta para los diferentes laberintos.
@@ -406,6 +407,32 @@ class Labyrinth:
 		"""
 		pass  # la subclase MorrisPool sobreescribe este método
 
+	def compute_density(self, all_trajectories, height, width):
+		"""
+		Acumula densidad de paso de todas las trayectorias y la normaliza con gamma.
+		Gamma < 1 comprime los valores altos, reduciendo la intensidad visual general
+		y reservando el rojo/amarillo solo para zonas muy transitadas.
+		Retorna np.ndarray uint8 (0-255), o None si no hay datos.
+		"""
+		density = np.zeros((height, width), dtype=np.float32)
+		for traj_x, traj_y in all_trajectories.values():
+			if len(traj_x) <= 1:
+				continue
+			trajectory = list(zip(traj_x, traj_y))
+			for j in range(1, len(trajectory)):
+				cv2.line(density, trajectory[j-1], trajectory[j], color=1.0, thickness=1)
+
+		if density.max() == 0:
+			print("No hay trayectorias para generar heatmap.")
+			return None
+
+		# Blur generoso: difumina y reduce picos de intensidad
+		density = cv2.GaussianBlur(density, (31, 31), 0)
+
+		# Normalizar linealmente a 0-255
+		density_norm = cv2.normalize(density, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+		return density_norm
+
 	def save_heatmap_image(self, all_trajectories, first_frame, output_dir):
 		"""
 		Genera un mapa de calor combinando todas las trayectorias sobre fondo negro.
@@ -418,26 +445,10 @@ class Labyrinth:
 		# Dibujar el área experimental de fondo (solo Morris Pool lo implementa)
 		self.draw_arena_outline(canvas)
 
-		# Acumular densidad por segmentos de trayectoria
-		density = np.zeros((height, width), dtype=np.float32)
-		for traj_x, traj_y in all_trajectories.values():
-			if len(traj_x) <= 1:
-				continue
-			trajectory = list(zip(traj_x, traj_y))
-			for j in range(1, len(trajectory)):
-				cv2.line(density, trajectory[j-1], trajectory[j], color=1.0, thickness=2)
-
-		if density.max() == 0:
-			print("No hay trayectorias para generar heatmap.")
+		density_norm = self.compute_density(all_trajectories, height, width)
+		if density_norm is None:
 			return
 
-		# Suavizar ligeramente para suavizar bordes sin difuminar la densidad real
-		density = cv2.GaussianBlur(density, (11, 11), 0)
-
-		# Normalizar a 0-255 de forma lineal — preserva las diferencias reales de densidad
-		density_norm = cv2.normalize(density, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-
-		# Aplicar colormap JET (azul=frío → rojo=caliente)
 		heatmap_color = cv2.applyColorMap(density_norm, cv2.COLORMAP_JET)
 
 		# Solo pintar píxeles con actividad real (fondo negro donde no hay trayectoria)
@@ -528,21 +539,10 @@ class MorrisPool(Labyrinth):
 		center = tuple(map(int, region.center))
 		radius = int(region.radius)
 
-		# Acumular densidad
-		density = np.zeros((height, width), dtype=np.float32)
-		for traj_x, traj_y in all_trajectories.values():
-			if len(traj_x) <= 1:
-				continue
-			trajectory = list(zip(traj_x, traj_y))
-			for j in range(1, len(trajectory)):
-				cv2.line(density, trajectory[j-1], trajectory[j], color=1.0, thickness=2)
-
-		if density.max() == 0:
-			print("No hay trayectorias para generar heatmap.")
+		density_norm = self.compute_density(all_trajectories, height, width)
+		if density_norm is None:
 			return
 
-		density = cv2.GaussianBlur(density, (11, 11), 0)
-		density_norm = cv2.normalize(density, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
 		heatmap_color = cv2.applyColorMap(density_norm, cv2.COLORMAP_JET)
 
 		# Máscara circular — solo pintar dentro de la piscina
@@ -694,6 +694,7 @@ class MorrisPool(Labyrinth):
 		ws.append(["% distancia en región",          round(m["pct_distance"], 2)])
 		ws.append([])
 		self.write_event_table(ws, m)
+
 
 # ==========================================================================
 # Cross Maze
