@@ -1,4 +1,5 @@
-from labyrinth import MorrisPool, CrossMaze 
+from labyrinths.labyrinth_MorrisPool import MorrisPool
+from labyrinths.labyrinth_CrossMaze import CrossMaze
 from regions import RegionManager, PolygonRegion, CircleRegion, CircularFractionRegion
 
 input1 = CrossMaze(
@@ -34,7 +35,7 @@ input3 = {
 	
 }
 
-input4 = MorrisPool(video_path= "../MorrisPool", regions= RegionManager([
+input4 = MorrisPool(video_path= "../videos/MorrisPool", regions= RegionManager([
 							CircularFractionRegion("H", (151, 110), 80, angle_start=270, fraction=0.25),
 							]), 
 							treatment="Escopolamina",

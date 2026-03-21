@@ -169,7 +169,7 @@ class Labyrinth:
 			self.trajectory_y = traj_y
 			# Restaurar start_time del video correspondiente
 			self.start_time = all_start_times[video_name]
-   
+
 			ws = wb.create_sheet(title=video_name[:31])
 
 			total_distance       = self.get_total_distance()
@@ -385,6 +385,7 @@ class Labyrinth:
 
 		img_path = os.path.join(output_dir, f"trajectory_{video_name}.png")
 		cv2.imwrite(img_path, background)
+<<<<<<< HEAD:code/labyrinth.py
 		print(f"Imagen guardada en: {img_path}")
   
 	def make_black_canvas(self, first_frame):
@@ -782,3 +783,6 @@ class CrossMaze(Labyrinth):
 			ws.append([])
 			self.write_event_table(ws, m)
 			ws.append([])  # separador entre regiones
+=======
+		print(f"Imagen guardada en: {img_path}")
+>>>>>>> bb9cf50 (ordeno en carpetas los diferentes laberintos, corrijo la documentacion de regions al formato google, modifico los archivos de mkdocs segun la distribucion de carpetas y coloco modo claro y oscuro autmatico a la pagina web):code/labyrinths/labyrinth.py

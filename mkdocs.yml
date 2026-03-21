@@ -9,21 +9,35 @@ nav:
 - Primeros pasos: getting-started.md
 - Arquitectura: architecture.md
 - Módulos:
-  - Labyrinth: modules/labyrinth.md
+  - Labyrinths: 
+    - Labyrinth: modules/labyrinths/labyrinth.md
+    - Labyrinth_CrossMaze: modules/labyrinths/labyrinth_CrossMaze.md
+    - Labyrinth_MorrisPool: modules/labyrinths/labyrinth_MorrisPool.md
   - Regions: modules/regions.md
   - Logic: modules/logic.md
   - Tracker: modules/tracker.md
   - input: modules/input.md
   - visualizer: modules/visualizer.md
   - experiment: modules/experiment.md
-  - RunExperiment: modules/run_experiment.md
+  - RunExperiment: modules/Run_Experiment.md
   - Run: modules/run.md
 - Contribuir: contributions.md
 
 
 theme:
   name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Modo oscuro
 
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Modo claro
 
 markdown_extensions:
 - admonition
@@ -34,4 +48,4 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          paths: ['code/']
+          paths: ['code/'] 
