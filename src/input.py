@@ -3,14 +3,14 @@ from labyrinths.labyrinth_CrossMaze import CrossMaze
 from regions import RegionManager, PolygonRegion, CircleRegion, CircularFractionRegion
 
 input1 = CrossMaze(
-    video_path="../CrossMaze",
+    video_path="../videos/CrossMaze",
     treatment="Control",
     subject_id="1",
     regions=RegionManager([
-        PolygonRegion("este",  [[630,420],[893,420],[893,350],[630,350]]),
-        PolygonRegion("oeste", [[288,420],[288,350],[550,350],[550,420]]),
-        PolygonRegion("norte", [[555,350],[625,350],[625,87],[555,87]]),
-        PolygonRegion("sur", [[555,683],[625,683],[625,420],[555,420]])
+        PolygonRegion("este",  [[630,420],[893,420],[893,350],[630,350]], overlap_threshold=0.75),
+        PolygonRegion("oeste", [[288,420],[288,350],[550,350],[550,420]], overlap_threshold=0.75),
+        PolygonRegion("norte", [[555,350],[625,350],[625,87],[555,87]], overlap_threshold=0.75),
+        PolygonRegion("sur", [[555,683],[625,683],[625,420],[555,420]], overlap_threshold=0.75)
     ]),
     min_detection_area=2000,
     hitbox_size=40,
@@ -36,7 +36,7 @@ input3 = {
 }
 
 input4 = MorrisPool(video_path= "../videos/MorrisPool", regions= RegionManager([
-							CircularFractionRegion("H", (151, 110), 80, angle_start=270, fraction=0.25),
+							CircularFractionRegion("H", (151, 110), 80, angle_start=270, fraction=0.25, overlap_threshold=0.75),
 							]), 
 							treatment="Escopolamina",
 							subject_id="1",

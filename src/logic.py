@@ -1,88 +1,98 @@
+"""logic.py
+=========
+
+Lógica de eventos de entrada y salida en regiones de interés.
+
+Este módulo es independiente de OpenCV y de cualquier interfaz gráfica.
+Recibe posiciones y tiempos, y mantiene el historial de cada región.
+"""
+
+
 class ZoneState:
-    """
-    Estado temporal asociado a una región de interés.
+    """Estado temporal asociado a una región de interés.
 
     Esta clase no conoce geometría ni video. Únicamente almacena
     el historial lógico de una región: si el objeto está dentro,
     cuándo entró, cuántas veces entró y cuánto tiempo total permaneció.
 
-    Atributos
-    ----------
-    inside : bool
-        Indica si el objeto se encuentra actualmente dentro de la región.
-    enter_time : float or None
-        Timestamp (en segundos) del último ingreso a la región.
-        Es None si el objeto no está dentro.
-    total_time : float
-        Tiempo total acumulado (en segundos) que el objeto ha pasado
-        dentro de la región.
-    entries : int
-        Número total de veces que el objeto ha entrado a la región.
+    Attributes:
+        inside: True si el objeto está actualmente dentro de la región.
+        enter_time: Timestamp en segundos del último ingreso, o None si
+            el objeto no está dentro.
+        enter_frame: Lista de frames absolutos en los que ocurrió una entrada.
+        exit_frame: Lista de frames absolutos en los que ocurrió una salida.
+        total_time: Tiempo total acumulado en segundos dentro de la región.
+        entries: Número total de entradas a la región.
+        events: Lista de tuplas (enter_time, exit_time) en segundos para
+            análisis detallado por evento.
     """
+
     def __init__(self):
+        """Inicializa el estado de una región con todos los contadores en cero."""
         self.inside = False
         self.enter_time = None
-        self.enter_frame = [] # Lista de frames de entrada
-        self.exit_frame = [] # Lista de frames de salida
+        self.enter_frame = []
+        self.exit_frame = []
         self.total_time = 0
         self.entries = 0
-
-        self.events = [] # Lista de eventos (entrada/salida) con timestamps para análisis detallado
+        self.events = []
 
 
 class EventLogic:
+    """Lógica de eventos de entrada y salida para múltiples regiones.
+
+    Recibe posiciones del objeto a lo largo del tiempo y determina
+    eventos de entrada y salida en cada región de interés. No realiza
+    detección visual ni define geometría: solo coordina estados.
+
+    La detección de pertenencia se delega a ``Region.contains_hitbox()``,
+    que respeta el ``overlap_threshold`` configurado por región:
+    - Si ``overlap_threshold == 0.0``: usa el punto central de la hitbox
+      (comportamiento original).
+    - Si ``overlap_threshold > 0.0``: evalúa la fracción del área de la
+      hitbox que interseca con la región.
+
+    Attributes:
+        regions: Lista de regiones de interés.
+        hitbox_size: Semilado de la hitbox cuadrada en píxeles.
+        states: Diccionario ``{region_id: ZoneState}`` con el estado de
+            cada región.
     """
-    Lógica de eventos de entrada y salida para múltiples regiones.
 
-    Esta clase recibe posiciones del objeto a lo largo del tiempo
-    y determina eventos de entrada y salida en cada región de interés.
-    No realiza detección visual ni define geometría: solo coordina estados.
+    def __init__(self, region_manager, hitbox_size: int = 0):
+        """Inicializa la lógica de eventos.
 
-    Supuestos
-    ---------
-    - `region_manager.regions` es una lista de regiones con:
-        - atributo `id` único
-        - método `contains(position)` -> bool
-    - El tiempo `t` está dado en segundos y es monótono creciente.
-
-    Atributos
-    ----------
-    regions : list
-        Lista de regiones de interés.
-    states : dict
-        Diccionario que mapea region.id -> ZoneState.
-    """
-    def __init__(self, region_manager):
-        self.regions = region_manager.regions
-        self.states = {r.region_id: ZoneState() for r in self.regions} # Se creaun zonestate para cada región y ahi se almacena todo lo que ocurre en esa region
-
-    def update(self, position, t, frame_idx):
+        Args:
+            region_manager: Objeto ``RegionManager`` con la lista de regiones.
+            hitbox_size: Semilado de la hitbox en píxeles, usado para calcular
+                el solapamiento de área cuando ``overlap_threshold > 0.0``.
+                Si es 0, el solapamiento por área no tiene efecto aunque el
+                umbral de la región sea mayor que cero.
         """
-        Actualiza el estado de todas las regiones dado un nuevo frame.
+        self.regions = region_manager.regions
+        self.hitbox_size = hitbox_size
+        self.states = {r.region_id: ZoneState() for r in self.regions}
+
+    def update(self, position, t: float, frame_idx: int) -> None:
+        """Actualiza el estado de todas las regiones dado un nuevo frame.
 
         Evalúa si el objeto entra o sale de cada región y actualiza
-        contadores y tiempos acumulados según corresponda.
+        contadores y tiempos acumulados. La decisión de pertenencia usa
+        ``contains_hitbox``, que delega en el modo punto o área según
+        el ``overlap_threshold`` de cada región.
 
-        Parámetros
-        ----------
-        position : tuple or None
-            Posición (x, y) del objeto detectado en el frame actual.
-            Si es None, no se actualiza ningún estado.
-        t : float
-            Timestamp actual en segundos (por ejemplo, frame / fps).
-        frame_idx : int
-            Índice del frame actual, para registro de eventos detallado.
-
-        Retorna
-        -------
-        None
+        Args:
+            position: Posición (x, y) del objeto detectado. Si es None,
+                no se actualiza ningún estado.
+            t: Timestamp actual en segundos (frame_idx / fps).
+            frame_idx: Índice del frame actual, para registro de eventos.
         """
         if position is None:
             return
 
         for region in self.regions:
             state = self.states[region.region_id]
-            inside_now = region.contains(position)
+            inside_now = region.contains_hitbox(position, self.hitbox_size)
 
             # Evento de entrada
             if inside_now and not state.inside:
@@ -96,6 +106,5 @@ class EventLogic:
                 state.inside = False
                 state.total_time += t - state.enter_time
                 state.exit_frame.append(frame_idx)
-                state.events.append((state.enter_time, t))  # Registro de evento de salida
+                state.events.append((state.enter_time, t))
                 state.enter_time = None
-                
