@@ -1,1 +1,1 @@
-::: labyrinths.labyrinth
+::: src.labyrinths.labyrinth

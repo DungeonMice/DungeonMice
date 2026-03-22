@@ -1,1 +1,1 @@
-::: labyrinths.labyrinth_CrossMaze
+::: src.labyrinths.labyrinth_CrossMaze

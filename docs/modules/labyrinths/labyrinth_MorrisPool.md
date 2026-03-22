@@ -1,1 +1,1 @@
-::: labyrinths.labyrinth_MorrisPool
+::: src.labyrinths.labyrinth_MorrisPool

@@ -28,13 +28,13 @@ class CrossMaze(Labyrinth):
 						 min_detection_area, hitbox_size, start_time, end_time,
 						 kernel_size, blur_size)
 
-		self._validate_cross_maze_regions()
+		self.validate_cross_maze_regions()
 
 	# ----------------------------------------------------------------------
 	# Validaciones específicas para Cross Maze
 	# ----------------------------------------------------------------------
 
-	def _validate_cross_maze_regions(self):
+	def validate_cross_maze_regions(self):
 		if len(self.regions.regions) < 2:
 			raise ValueError("CrossMaze requiere al menos 2 regiones de interés.")
 		for region in self.regions.regions:
@@ -69,7 +69,7 @@ class CrossMaze(Labyrinth):
 	# Resultados
 	# ----------------------------------------------------------------------
 
-	def _write_summary(self, ws, events_on_each_region, total_distance, total_recording_time):
+	def write_summary(self, ws, events_on_each_region, total_distance, total_recording_time):
 		"""Resumen de CrossMaze: una sección por región."""
 		ws.append(["RESUMEN GLOBAL", ""])
 		ws.append(["Distancia total recorrida (px)", round(total_distance, 2)])
@@ -81,7 +81,7 @@ class CrossMaze(Labyrinth):
 			enter_frames = list(state.enter_frame)
 			exit_frames  = list(state.exit_frame)
 			enter_times  = list(state.events)  # lista de (enter_time, exit_time)
-			m = self._compute_region_metrics(
+			m = self.compute_region_metrics(
 						enter_frames, exit_frames, enter_times,
 						total_distance, len(self.trajectory_x) / self.fps
 					)
@@ -93,5 +93,7 @@ class CrossMaze(Labyrinth):
 			ws.append(["% tiempo en región",             round(m["pct_time"], 2)])
 			ws.append(["% distancia en región",          round(m["pct_distance"], 2)])
 			ws.append([])
-			self._write_event_table(ws, m)
+			self.write_event_table(ws, m)
 			ws.append([])  # separador entre regiones
+
+		print(f"Imagen guardada en: {img_path}")

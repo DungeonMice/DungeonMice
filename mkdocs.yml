@@ -19,7 +19,7 @@ nav:
   - input: modules/input.md
   - visualizer: modules/visualizer.md
   - experiment: modules/experiment.md
-  - RunExperiment: modules/Run_Experiment.md
+  - RunExperiment: modules/RunExperiment.md
   - Run: modules/run.md
 - Contribuir: contributions.md
 
@@ -48,4 +48,4 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          paths: ['code/'] 
+          paths: ['.'] 
