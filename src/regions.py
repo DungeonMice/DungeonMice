@@ -249,6 +249,12 @@ class CircularFractionRegion(Region):
 
         self.angle_start = angle_start % 360
         self.angle_end = float(angle_end)
+    
+    def _angle_in_sector(self, angle):
+        if self.angle_start <= self.angle_end:
+            return self.angle_start <= angle <= self.angle_end
+        else:
+            return angle >= self.angle_start or angle <= self.angle_end
 
     def contains(self, point):
         """
