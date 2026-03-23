@@ -101,8 +101,9 @@ class CrossMaze(Labyrinth):
 	) -> None:
 		"""Escribe el resumen de CrossMaze en la hoja de Excel.
 
-		Genera una sección de resumen global y una sección detallada por cada
-		región, incluyendo la tabla de eventos de entrada/salida.
+		Genera una sección de resumen global con métricas por tipo de brazo
+		(abierto: este-oeste, cerrado: norte-sur) y una sección detallada
+		por cada región con su tabla de eventos de entrada/salida.
 
 		Args:
 			ws: Hoja de Excel (Worksheet) donde escribir.
@@ -111,20 +112,60 @@ class CrossMaze(Labyrinth):
 			total_distance: Distancia total recorrida en píxeles.
 			total_recording_time: Duración total de la grabación en segundos.
 		"""
-		ws.append(["RESUMEN GLOBAL", ""])
-		ws.append(["Distancia total recorrida (px)", round(total_distance, 2)])
-		ws.append(["Duración total grabación (s)",   round(len(self.trajectory_x) / self.fps, 3)])
-		ws.append([])
+		recording_time = len(self.trajectory_x) / self.fps
 
+		# Calcular métricas por región
+		metrics = {}
 		for region in self.regions.regions:
 			state        = events_on_each_region[region.region_id]
 			enter_frames = list(state.enter_frame)
 			exit_frames  = list(state.exit_frame)
 			enter_times  = list(state.events)
-			m = self.compute_region_metrics(
+			metrics[region.region_id] = self.compute_region_metrics(
 				enter_frames, exit_frames, enter_times,
-				total_distance, len(self.trajectory_x) / self.fps,
+				total_distance, recording_time,
 			)
+
+		# Agrupar por tipo de brazo
+		open_ids   = [r.region_id for r in self.regions.regions if r.region_id.lower() in ("este", "oeste")]
+		closed_ids = [r.region_id for r in self.regions.regions if r.region_id.lower() in ("norte", "sur")]
+
+		def arm_totals(ids):
+			entries  = sum(len(metrics[i]["enter_frames"]) for i in ids if i in metrics)
+			time     = sum(metrics[i]["total_time"]        for i in ids if i in metrics)
+			distance = sum(metrics[i]["total_dist"]        for i in ids if i in metrics)
+			pct_time = (time     / recording_time * 100) if recording_time > 0 else 0
+			pct_dist = (distance / total_distance * 100) if total_distance > 0 else 0
+			return entries, time, distance, pct_time, pct_dist
+
+		open_entries,   open_time,   open_dist,   open_pct_time,   open_pct_dist   = arm_totals(open_ids)
+		closed_entries, closed_time, closed_dist, closed_pct_time, closed_pct_dist = arm_totals(closed_ids)
+
+		# --- Resumen global ---
+		ws.append(["RESUMEN GLOBAL", ""])
+		ws.append(["Distancia total recorrida (px)", round(total_distance, 2)])
+		ws.append(["Duración total grabación (s)",   round(recording_time, 3)])
+		ws.append([])
+
+		ws.append(["BRAZOS ABIERTOS (este + oeste)", ""])
+		ws.append(["Nº de entradas",        open_entries])
+		ws.append(["Tiempo total (s)",      round(open_time, 3)])
+		ws.append(["Distancia total (px)",  round(open_dist, 2)])
+		ws.append(["% tiempo",              round(open_pct_time, 2)])
+		ws.append(["% distancia",           round(open_pct_dist, 2)])
+		ws.append([])
+
+		ws.append(["BRAZOS CERRADOS (norte + sur)", ""])
+		ws.append(["Nº de entradas",        closed_entries])
+		ws.append(["Tiempo total (s)",      round(closed_time, 3)])
+		ws.append(["Distancia total (px)",  round(closed_dist, 2)])
+		ws.append(["% tiempo",              round(closed_pct_time, 2)])
+		ws.append(["% distancia",           round(closed_pct_dist, 2)])
+		ws.append([])
+
+		# --- Detalle por región ---
+		for region in self.regions.regions:
+			m = metrics[region.region_id]
 			ws.append([f"REGIÓN: {region.region_id}", ""])
 			ws.append(["Nº de entradas",                len(m["enter_frames"])])
 			ws.append(["Tiempo total en región (s)",     round(m["total_time"], 3)])

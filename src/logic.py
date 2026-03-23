@@ -111,8 +111,8 @@ class EventLogic:
 
 				duration = t - state.enter_time  # type: ignore
 
-				# Descartar si distancia insignificante Y duración menor al mínimo
-				if state._current_distance < 10.0 and duration < self.min_entry_time:
+				# Descartar si distancia insignificante (Y para duración menor al mínimo agregar and duration < self.min_entry_time) 
+				if state._current_distance < 10.0:
 					state.enter_frame.pop()
 					state.entries -= 1
 					state.enter_time = None

@@ -389,7 +389,7 @@ class Labyrinth:
 		for i in range(len(enter_frames)):
 			duration = (exit_frames[i] - enter_frames[i]) / self.fps
 			distance = self.get_total_distance(start_frame=enter_frames[i], end_frame=exit_frames[i])
-			if distance < 10.0 and duration < 1.0:
+			if distance < 10.0: # Agregar si hace falta  and duration < 1.0
 				continue
 			event_list.append((duration, distance))
 			enter_frames_filtered.append(enter_frames[i])
