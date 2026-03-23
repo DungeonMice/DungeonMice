@@ -36,7 +36,7 @@ input3 = {
 }
 
 input4 = MorrisPool(video_path= "../videos/MorrisPool", regions= RegionManager([
-							CircularFractionRegion("H", (151, 110), 80, angle_start=270, fraction=0.25, overlap_threshold=0.75),
+							CircularFractionRegion("H", (151, 110), 90, angle_start=270, fraction=0.25, overlap_threshold=0.75),
 							]), 
 							treatment="Escopolamina",
 							subject_id="1",
