@@ -62,20 +62,16 @@ class Region:
 		"""
 		raise NotImplementedError
 
-	def overlap_fraction(self, point: tuple[float, float], hitbox_size: int) -> float:
+	def overlap_fraction(self, point: tuple[float, float], hitbox_w: int, hitbox_h: int) -> float:
 		"""Calcula la fracción del área de la hitbox que interseca con la región.
 
-		Usa una grilla de puntos uniformemente distribuidos dentro de la hitbox
-		rectangular centrada en ``point``. La fracción es el cociente entre los
-		puntos dentro de la región y el total de puntos de la grilla.
-
 		Args:
-			point: Centro de la hitbox en coordenadas de imagen ``(x, y)``.
-			hitbox_size: Semilado de la hitbox cuadrada en píxeles.
+			point: Centro de la hitbox en coordenadas de imagen (x, y).
+			hitbox_w: Semiancho de la hitbox en píxeles.
+			hitbox_h: Semialto de la hitbox en píxeles.
 
 		Returns:
-			Fracción en ``[0.0, 1.0]``. 0.0 si no hay solapamiento, 1.0 si la
-			hitbox está completamente dentro de la región.
+			Fracción en [0.0, 1.0].
 		"""
 		cx, cy = point
 		steps = _OVERLAP_GRID_STEPS
@@ -84,35 +80,39 @@ class Region:
 
 		for i in range(steps):
 			for j in range(steps):
-				# Distribuir puntos de forma uniforme dentro de la hitbox,
-				# con un margen de medio paso para evitar evaluar justo el borde.
-				t_x = (i + 0.5) / steps  # [0, 1)
+				t_x = (i + 0.5) / steps
 				t_y = (j + 0.5) / steps
-				px = cx - hitbox_size + t_x * 2 * hitbox_size
-				py = cy - hitbox_size + t_y * 2 * hitbox_size
+				px = cx - hitbox_w + t_x * 2 * hitbox_w
+				py = cy - hitbox_h + t_y * 2 * hitbox_h
 				if self.contains((px, py)):
 					inside += 1
 
 		return inside / total
 
-	def contains_hitbox(self, point: tuple[float, float], hitbox_size: int) -> bool:
+	def contains_hitbox(
+		self,
+		point: tuple[float, float],
+		hitbox_w: int,
+		hitbox_h: int | None = None,
+	) -> bool:
 		"""Determina si la hitbox está suficientemente dentro de la región.
 
-		Si ``overlap_threshold`` es 0.0, delega en ``contains(point)``
-		preservando el comportamiento original basado en el punto central.
-		En caso contrario, calcula ``overlap_fraction`` y lo compara con
-		el umbral configurado.
+		Si overlap_threshold es 0.0, delega en contains(point).
+		En caso contrario evalúa overlap_fraction contra el umbral.
 
 		Args:
-			point: Centro de la hitbox en coordenadas de imagen ``(x, y)``.
-			hitbox_size: Semilado de la hitbox cuadrada en píxeles.
+			point: Centro de la hitbox en coordenadas de imagen (x, y).
+			hitbox_w: Semiancho de la hitbox en píxeles.
+			hitbox_h: Semialto de la hitbox en píxeles. Si es None se usa hitbox_w.
 
 		Returns:
 			True si la condición de solapamiento se cumple.
 		"""
 		if self.overlap_threshold == 0.0:
 			return self.contains(point)
-		return self.overlap_fraction(point, hitbox_size) >= self.overlap_threshold
+		if hitbox_h is None:
+			hitbox_h = hitbox_w
+		return self.overlap_fraction(point, hitbox_w, hitbox_h) >= self.overlap_threshold
 
 	def mask(self, shape: tuple[int, int]) -> np.ndarray:
 		"""Genera una máscara binaria de la región.

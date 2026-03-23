@@ -10,10 +10,6 @@ import math
 class ZoneState:
 	"""Estado temporal asociado a una región de interés.
 
-	No conoce geometría ni video. Almacena únicamente el historial
-	lógico de una región: si el objeto está dentro, cuándo entró,
-	cuántas veces entró y cuánto tiempo total permaneció.
-
 	Attributes:
 		inside: True si el objeto está actualmente dentro de la región.
 		enter_time: Timestamp en segundos del último ingreso, o None si
@@ -22,12 +18,9 @@ class ZoneState:
 		exit_frame: Lista de frames absolutos en los que ocurrió una salida.
 		total_time: Tiempo total acumulado en segundos dentro de la región.
 		entries: Número total de entradas a la región.
-		events: Lista de tuplas (enter_time, exit_time) en segundos para
-			análisis detallado por evento.
-		_last_position: Última posición registrada dentro de la región, usada
-			para acumular distancia recorrida durante el evento actual.
-		_current_distance: Distancia acumulada en píxeles durante el evento
-			de entrada actual. Se reinicia a 0 en cada entrada.
+		events: Lista de tuplas (enter_time, exit_time) en segundos.
+		_last_position: Última posición registrada dentro de la región.
+		_current_distance: Distancia acumulada en píxeles durante el evento actual.
 	"""
 
 	def __init__(self):
@@ -47,56 +40,39 @@ class EventLogic:
 	"""Lógica de eventos de entrada y salida para múltiples regiones.
 
 	Recibe posiciones del objeto a lo largo del tiempo y determina
-	eventos de entrada y salida en cada región de interés. No realiza
-	detección visual ni define geometría: solo coordina estados.
+	eventos de entrada y salida en cada región de interés.
 
-	La detección de pertenencia se delega a Region.contains_hitbox(),
-	que respeta el overlap_threshold configurado por región:
-
-	- Si overlap_threshold == 0.0: usa el punto central de la hitbox
-	  (comportamiento original).
-	- Si overlap_threshold > 0.0: evalúa la fracción del área de la
-	  hitbox que interseca con la región.
-
-	Las entradas en las que el ratón no registró ningún desplazamiento dentro
-	de la región (distancia acumulada == 0.0) se descartan al momento de la
-	salida: no se registran en enter_frame, exit_frame, events ni se suma
-	tiempo a total_time. Esto filtra contactos superficiales como asomar la
-	nariz sin entrar con el cuerpo.
+	Un evento se descarta al salir si la distancia acumulada dentro de la
+	región es menor a 1 píxel Y la duración es menor a min_entry_time.
+	Si la duración supera min_entry_time el evento se conserva aunque la
+	distancia sea insignificante (caso de tracker perdido dentro de la región).
 
 	Attributes:
 		regions: Lista de regiones de interés.
-		hitbox_size: Semilado de la hitbox cuadrada en píxeles.
+		hitbox_w: Semiancho de la hitbox cuadrada en píxeles.
+		hitbox_h: Semialto de la hitbox cuadrada en píxeles.
+		min_entry_time: Tiempo mínimo en segundos para conservar un evento
+			con distancia insignificante.
 		states: Diccionario {region_id: ZoneState} con el estado de cada región.
 	"""
 
-	def __init__(self, region_manager, hitbox_size: int = 0):
+	def __init__(self, region_manager, hitbox_size: int = 0, min_entry_time: float = 1.0):
 		"""Inicializa la lógica de eventos.
 
 		Args:
 			region_manager: Objeto RegionManager con la lista de regiones.
-			hitbox_size: Semilado de la hitbox en píxeles, usado para calcular
-				el solapamiento de área cuando overlap_threshold > 0.0.
-				Si es 0, el solapamiento por área no tiene efecto aunque el
-				umbral de la región sea mayor que cero.
+			hitbox_size: Semilado de la hitbox cuadrada en píxeles.
+			min_entry_time: Tiempo mínimo en segundos para conservar un evento
+				con distancia menor a 1 píxel.
 		"""
 		self.regions = region_manager.regions
-		self.hitbox_size = hitbox_size
+		self.hitbox_w = hitbox_size
+		self.hitbox_h = hitbox_size
+		self.min_entry_time = min_entry_time
 		self.states = {r.region_id: ZoneState() for r in self.regions}
 
 	def update(self, position, t: float, frame_idx: int) -> None:
 		"""Actualiza el estado de todas las regiones dado un nuevo frame.
-
-		Evalúa si el objeto entra o sale de cada región y actualiza
-		contadores y tiempos acumulados. La decisión de pertenencia usa
-		contains_hitbox, que delega en el modo punto o área según el
-		overlap_threshold de cada región.
-
-		Mientras el ratón permanece dentro de una región, se acumula la
-		distancia recorrida entre posiciones consecutivas. Al producirse
-		una salida, si la distancia acumulada es exactamente 0.0 el evento
-		se descarta por completo: no se registra la entrada ni la salida, y
-		no se suma tiempo a total_time.
 
 		Args:
 			position: Posición (x, y) del objeto detectado. Si es None,
@@ -109,7 +85,7 @@ class EventLogic:
 
 		for region in self.regions:
 			state = self.states[region.region_id]
-			inside_now = region.contains_hitbox(position, self.hitbox_size)
+			inside_now = region.contains_hitbox(position, self.hitbox_w, self.hitbox_h)
 
 			# Evento de entrada
 			if inside_now and not state.inside:
@@ -133,8 +109,10 @@ class EventLogic:
 				state.inside = False
 				state._last_position = None
 
-				# Descartar la entrada si el ratón no se movió dentro de la región
-				if state._current_distance == 0.0:
+				duration = t - state.enter_time  # type: ignore
+
+				# Descartar si distancia insignificante Y duración menor al mínimo
+				if state._current_distance < 10.0 and duration < self.min_entry_time:
 					state.enter_frame.pop()
 					state.entries -= 1
 					state.enter_time = None

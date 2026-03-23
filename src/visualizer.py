@@ -17,18 +17,14 @@ class ExperimentVisualizer:
 
 	Attributes:
 		regions: ``RegionManager`` con las regiones de interés a visualizar.
-		hitbox_size: Semilado de la hitbox del ratón en píxeles.
+		hitbox_w: Semiancho de la hitbox del ratón en píxeles.
+		hitbox_h: Semialto de la hitbox del ratón en píxeles.
 	"""
 
 	def __init__(self, regions, hitbox_size: int = 10):
-		"""Inicializa el visualizador.
-
-		Args:
-			regions: ``RegionManager`` con las regiones de interés.
-			hitbox_size: Semilado de la hitbox del ratón en píxeles.
-		"""
 		self.regions = regions
-		self.hitbox_size = hitbox_size
+		self.hitbox_w = hitbox_size
+		self.hitbox_h = hitbox_size
 
 	def draw_regions(self, frame: np.ndarray, logic_states: dict) -> None:
 		"""Dibuja todas las regiones sobre el frame con color según su estado.
@@ -53,8 +49,8 @@ class ExperimentVisualizer:
 
 		Args:
 			frame: Frame sobre el cual dibujar.
-			position: Coordenadas ``(x, y)`` del ratón. Si es None no dibuja nada.
-			logic_states: Diccionario ``{region_id: ZoneState}`` con el estado
+			position: Coordenadas (x, y) del ratón. Si es None no dibuja nada.
+			logic_states: Diccionario {region_id: ZoneState} con el estado
 				de cada región.
 		"""
 		if position is None:
@@ -66,8 +62,8 @@ class ExperimentVisualizer:
 		x, y = position
 		cv2.rectangle(
 			frame,
-			(x - self.hitbox_size, y - self.hitbox_size),
-			(x + self.hitbox_size, y + self.hitbox_size),
+			(x - self.hitbox_w, y - self.hitbox_h),
+			(x + self.hitbox_w, y + self.hitbox_h),
 			hitbox_color,
 			2,
 		)

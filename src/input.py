@@ -7,16 +7,16 @@ input1 = CrossMaze(
     treatment="Control",
     subject_id="1",
     regions=RegionManager([
-        PolygonRegion("este",  [[630,420],[893,420],[893,350],[630,350]], overlap_threshold=0.75),
-        PolygonRegion("oeste", [[288,420],[288,350],[550,350],[550,420]], overlap_threshold=0.75),
-        PolygonRegion("norte", [[555,350],[625,350],[625,87],[555,87]], overlap_threshold=0.75),
-        PolygonRegion("sur", [[555,683],[625,683],[625,420],[555,420]], overlap_threshold=0.75)
+        PolygonRegion("este",  [[630,420],[900,420],[900,350],[630,350]], overlap_threshold=0.80),
+        PolygonRegion("oeste", [[240,420],[240,350],[550,350],[550,420]], overlap_threshold=0.80),
+        PolygonRegion("norte", [[545,350],[635,350],[635,10],[545,10]],   overlap_threshold=0.80),
+        PolygonRegion("sur",   [[545,720],[635,720],[635,420],[545,420]], overlap_threshold=0.80)
     ]),
     min_detection_area=2000,
     hitbox_size=40,
     start_time=25,
     kernel_size=15,
-    blur_size=9 # debe ser impar: 7, 11, 15, 21
+    blur_size=9
 )
 
 input2 = {

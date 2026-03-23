@@ -20,15 +20,15 @@ class Labyrinth:
 	lectura de posiciones, cálculo de distancia, generación de Excel e
 	imágenes de trayectoria y mapa de calor.
 
-	Las subclases deben implementar process_frame, process_video
-	y write_summary.
+	Las subclases deben implementar ``process_frame``, ``process_video``
+	y ``write_summary``.
 
 	Attributes:
 		video_path: Ruta al archivo de video o carpeta con videos.
 		treatment: Nombre del tratamiento aplicado al sujeto.
 		subject_id: Identificador del sujeto de experimentación.
-		mace_type: Tipo de laberinto (e.g. "CrossMaze", "MorrisPool").
-		regions: RegionManager con las regiones de interés.
+		mace_type: Tipo de laberinto (e.g. ``"CrossMaze"``, ``"MorrisPool"``).
+		regions: ``RegionManager`` con las regiones de interés.
 		start_time: Tiempo en segundos desde el que se empieza a registrar.
 		end_time: Tiempo en segundos en el que termina el registro, o None
 			para procesar hasta el final del video.
@@ -38,7 +38,7 @@ class Labyrinth:
 		kernel_size: Tamaño del kernel morfológico del tracker.
 		blur_size: Tamaño del kernel de GaussianBlur del tracker. 0 desactiva
 			el blur.
-		fps: FPS del video. Se asigna al abrir el video en RunExperiment.
+		fps: FPS del video. Se asigna al abrir el video en ``RunExperiment``.
 		trajectory_x: Lista de coordenadas x de la trayectoria grabada.
 		trajectory_y: Lista de coordenadas y de la trayectoria grabada.
 		trajectory_time: Lista de timestamps en segundos de cada posición.
@@ -65,8 +65,8 @@ class Labyrinth:
 			video_path: Ruta al archivo de video o carpeta con videos.
 			treatment: Nombre del tratamiento aplicado al sujeto.
 			subject_id: Identificador del sujeto de experimentación.
-			mace_type: Tipo de laberinto (e.g. "CrossMaze").
-			regions: RegionManager con las regiones de interés.
+			mace_type: Tipo de laberinto (e.g. ``"CrossMaze"``).
+			regions: ``RegionManager`` con las regiones de interés.
 			min_detection_area: Área mínima en píxeles para detectar al ratón.
 			hitbox_size: Semilado de la hitbox cuadrada en píxeles.
 			start_time: Tiempo en segundos desde el que se empieza a registrar.
@@ -77,7 +77,7 @@ class Labyrinth:
 
 		Raises:
 			ValueError: Si alguno de los parámetros no cumple las restricciones
-				de tipo o valor definidas en _validate_inputs.
+				de tipo o valor definidas en ``_validate_inputs``.
 		"""
 		self.video_path         = video_path
 		self.treatment          = treatment
@@ -146,8 +146,7 @@ class Labyrinth:
 		"""Procesa un frame individual. Debe ser implementado por cada subclase.
 
 		Args:
-			position: Coordenadas (x, y) del ratón detectado, o None si no
-				se detectó.
+			position: Lista de coordenadas ``(x, y)`` detectadas en el frame.
 			time: Tiempo actual en segundos.
 
 		Raises:
@@ -165,15 +164,15 @@ class Labyrinth:
 	) -> None:
 		"""Procesa los resultados de todos los videos. Debe ser implementado por cada subclase.
 
-		No llama a write_results — esa responsabilidad recae completamente
-		en la subclase para evitar efectos secundarios si se llama a super().
+		No llama a ``write_results`` — esa responsabilidad recae completamente
+		en la subclase para evitar efectos secundarios si se llama a ``super()``.
 
 		Args:
-			all_results: {nombre_video: events_on_each_region}.
-			all_trajectories: {nombre_video: (trajectory_x, trajectory_y)}.
-			all_video_paths: {nombre_video: ruta_absoluta}.
-			all_first_frames: {nombre_video: primer_frame}.
-			all_start_times: {nombre_video: start_time}.
+			all_results: ``{nombre_video: events_on_each_region}``.
+			all_trajectories: ``{nombre_video: (trajectory_x, trajectory_y)}``.
+			all_video_paths: ``{nombre_video: ruta_absoluta}``.
+			all_first_frames: ``{nombre_video: primer_frame}``.
+			all_start_times: ``{nombre_video: start_time}``.
 
 		Raises:
 			NotImplementedError: Siempre. La subclase debe sobreescribir este metodo.
@@ -190,7 +189,7 @@ class Labyrinth:
 		Si la posición es None (no se detectó ratón en el frame), no se guarda nada.
 
 		Args:
-			position: Coordenadas (x, y) del ratón detectado, o None si no
+			position: Coordenadas ``(x, y)`` del ratón detectado, o None si no
 				se detectó.
 			time: Tiempo actual en segundos.
 		"""
@@ -205,7 +204,7 @@ class Labyrinth:
 		"""Calcula la distancia total recorrida en píxeles dentro de un rango de frames.
 
 		Los frames de entrada son absolutos del video. Internamente se convierten
-		a índices relativos de la trayectoria, que empieza en start_time * fps.
+		a índices relativos de la trayectoria, que empieza en ``start_time * fps``.
 
 		Args:
 			start_frame: Frame absoluto del video desde el cual empezar.
@@ -220,6 +219,7 @@ class Labyrinth:
 		if len(trajectory) <= 1:
 			return 0.0
 
+		# Convertir frames absolutos a índices relativos de la trayectoria
 		recording_start = int(self.start_time * self.fps)
 
 		if end_frame is None:
@@ -238,7 +238,7 @@ class Labyrinth:
 			pt2 = trajectory_filtered[i]
 			dx  = pt2[0] - pt1[0]
 			dy  = pt2[1] - pt1[1]
-			total_distance += (dx * dx + dy * dy) ** 0.5
+			total_distance += np.sqrt(dx * dx + dy * dy)
 
 		return total_distance
 
@@ -253,15 +253,15 @@ class Labyrinth:
 		"""Genera el archivo Excel y las imágenes PNG de trayectoria y heatmap.
 
 		Itera sobre todos los videos procesados, crea una hoja por video en el
-		Excel y delega el contenido específico del resumen a write_summary
+		Excel y delega el contenido específico del resumen a ``write_summary``
 		de cada subclase.
 
 		Args:
-			all_results: {nombre_video: events_on_each_region}.
-			all_trajectories: {nombre_video: (trajectory_x, trajectory_y)}.
-			all_video_paths: {nombre_video: ruta_absoluta}.
-			all_first_frames: {nombre_video: primer_frame}.
-			all_start_times: {nombre_video: start_time}.
+			all_results: ``{nombre_video: events_on_each_region}``.
+			all_trajectories: ``{nombre_video: (trajectory_x, trajectory_y)}``.
+			all_video_paths: ``{nombre_video: ruta_absoluta}``.
+			all_first_frames: ``{nombre_video: primer_frame}``.
+			all_start_times: ``{nombre_video: start_time}``.
 		"""
 		wb = Workbook()
 		wb.remove(wb.active)
@@ -305,7 +305,7 @@ class Labyrinth:
 		"""Escribe la sección de metadatos del experimento en la hoja de Excel.
 
 		Args:
-			ws: Hoja de Excel (Worksheet) donde escribir.
+			ws: Hoja de Excel (``Worksheet``) donde escribir.
 			video_name: Nombre del video procesado.
 		"""
 		meta = [
@@ -331,8 +331,8 @@ class Labyrinth:
 		"""Escribe la seccion de resumen en la hoja. Debe ser implementado por cada subclase.
 
 		Args:
-			ws: Hoja de Excel (Worksheet) donde escribir.
-			events_on_each_region: {region_id: ZoneState} con los eventos
+			ws: Hoja de Excel (``Worksheet``) donde escribir.
+			events_on_each_region: ``{region_id: ZoneState}`` con los eventos
 				de cada region.
 			total_distance: Distancia total recorrida en pixeles.
 			total_recording_time: Duracion total de la grabacion en segundos.
@@ -352,9 +352,9 @@ class Labyrinth:
 	) -> dict:
 		"""Calcula las métricas de una región a partir de sus frames de entrada/salida.
 
-		Si el sujeto quedó dentro de la región al terminar el video (una entrada
-		sin salida correspondiente), se añade una salida artificial al final de
-		la grabación.
+		Filtra eventos con distancia menor a 1 píxel y duración menor a 1 segundo
+		antes de calcular totales. Si el sujeto quedó dentro al terminar el video
+		se añade una salida artificial al final de la grabación.
 
 		Args:
 			enter_frames: Frames absolutos de entrada a la región.
@@ -368,12 +368,12 @@ class Labyrinth:
 			Diccionario con las siguientes claves:
 
 			- event_list: lista de tuplas (duración, distancia) por evento.
-			- enter_frames: lista de frames de entrada (corregida si es necesario).
-			- exit_frames: lista de frames de salida (corregida si es necesario).
+			- enter_frames: lista de frames de entrada filtrada.
+			- exit_frames: lista de frames de salida filtrada.
 			- total_time: tiempo total en la región en segundos.
 			- total_dist: distancia total dentro de la región en píxeles.
 			- latency: latencia al primer ingreso en segundos, o None si no hubo
-			  ingresos.
+			ingresos.
 			- pct_time: porcentaje del tiempo de grabación dentro de la región.
 			- pct_distance: porcentaje de la distancia total dentro de la región.
 		"""
@@ -381,12 +381,22 @@ class Labyrinth:
 		if len(enter_frames) == len(exit_frames) + 1:
 			exit_frames.append(int(self.fps * (self.end_time or total_recording_time + self.start_time)))
 
-		# Duración y distancia por cada evento de entrada/salida
-		event_list = []
+		# Construir event_list filtrando entradas falsas
+		event_list           = []
+		enter_frames_filtered = []
+		exit_frames_filtered  = []
+
 		for i in range(len(enter_frames)):
 			duration = (exit_frames[i] - enter_frames[i]) / self.fps
 			distance = self.get_total_distance(start_frame=enter_frames[i], end_frame=exit_frames[i])
+			if distance < 10.0 and duration < 1.0:
+				continue
 			event_list.append((duration, distance))
+			enter_frames_filtered.append(enter_frames[i])
+			exit_frames_filtered.append(exit_frames[i])
+
+		enter_frames = enter_frames_filtered
+		exit_frames  = exit_frames_filtered
 
 		total_time_in_region     = sum(e[0] for e in event_list)
 		total_distance_in_region = sum(e[1] for e in event_list)
@@ -414,8 +424,8 @@ class Labyrinth:
 		contiene los totales de duración y distancia mediante fórmulas de suma.
 
 		Args:
-			ws: Hoja de Excel (Worksheet) donde escribir.
-			metrics: Diccionario resultado de compute_region_metrics.
+			ws: Hoja de Excel (``Worksheet``) donde escribir.
+			metrics: Diccionario resultado de ``compute_region_metrics``.
 		"""
 		headers = [
 			"Evento #", "Frame entrada", "Tiempo entrada (s)",
@@ -424,6 +434,7 @@ class Labyrinth:
 		]
 		ws.append(headers)
 
+		# Estilo encabezados: fondo azul, texto blanco, centrado
 		header_row = ws.max_row
 		for col in range(1, len(headers) + 1):
 			cell           = ws.cell(row=header_row, column=col)
@@ -431,6 +442,7 @@ class Labyrinth:
 			cell.fill      = PatternFill("solid", start_color="2F5496")
 			cell.alignment = Alignment(horizontal="center")
 
+		# Una fila por evento
 		for i, event in enumerate(metrics["event_list"]):
 			ws.append([
 				i + 1,
@@ -442,6 +454,7 @@ class Labyrinth:
 				round(event[1], 2),
 			])
 
+		# Fila de totales
 		total_row_data = ["TOTAL", "", "", "", ""]
 		if len(metrics["event_list"]) > 0:
 			first_data_row = header_row + 1
@@ -464,7 +477,7 @@ class Labyrinth:
 		"""Aplica formato final a la hoja: centra contenido y ajusta anchos de columna.
 
 		Args:
-			ws: Hoja de Excel (Worksheet) a formatear.
+			ws: Hoja de Excel (``Worksheet``) a formatear.
 		"""
 		for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
 			for cell in row:
@@ -513,15 +526,15 @@ class Labyrinth:
 		print(f"Imagen guardada en: {img_path}")
 
 	def make_black_canvas(self, first_frame: np.ndarray) -> tuple:
-		"""Crea un canvas negro del mismo tamaño que first_frame.
+		"""Crea un canvas negro del mismo tamaño que ``first_frame``.
 
 		Args:
 			first_frame: Frame de referencia para obtener las dimensiones.
-				Si es None, se usa un tamaño genérico de 600x800.
+				Si es None, se usa un tamaño genérico de 600×800.
 
 		Returns:
-			Tupla (canvas, height, width) donde canvas es un np.ndarray
-			de ceros en BGR.
+			Tupla ``(canvas, height, width)`` donde ``canvas`` es un
+			np.ndarray de ceros en BGR.
 		"""
 		if first_frame is not None:
 			height, width = first_frame.shape[:2]
@@ -534,7 +547,8 @@ class Labyrinth:
 		"""Dibuja el contorno del área experimental sobre el canvas.
 
 		Implementación base vacía. Las subclases que necesiten dibujar un
-		contorno específico deben sobreescribir este método.
+		contorno específico (e.g. el círculo de la piscina en MorrisPool)
+		deben sobreescribir este método.
 
 		Args:
 			canvas: Imagen BGR sobre la cual dibujar.
@@ -549,13 +563,17 @@ class Labyrinth:
 	) -> np.ndarray | None:
 		"""Acumula la densidad de paso de todas las trayectorias y la normaliza.
 
+		Dibuja líneas entre puntos consecutivos de cada trayectoria sobre una
+		imagen de acumulación flotante, aplica un suavizado gaussiano y normaliza
+		el resultado a ``[0, 255]``.
+
 		Args:
-			all_trajectories: {nombre_video: (traj_x, traj_y)}.
+			all_trajectories: ``{nombre_video: (traj_x, traj_y)}``.
 			height: Alto de la imagen de densidad en píxeles.
 			width: Ancho de la imagen de densidad en píxeles.
 
 		Returns:
-			Array uint8 normalizado [0, 255], o None si no hay trayectorias
+			Array uint8 normalizado ``[0, 255]``, o None si no hay trayectorias
 			con más de un punto.
 		"""
 		density = np.zeros((height, width), dtype=np.float32)
@@ -571,7 +589,7 @@ class Labyrinth:
 			return None
 
 		density = cv2.GaussianBlur(density, (31, 31), 0)
-		density_norm = cv2.normalize(density, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8) # type: ignore
+		density_norm = cv2.normalize(density, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
 		return density_norm
 
 	def save_heatmap_image(
@@ -582,9 +600,13 @@ class Labyrinth:
 	) -> None:
 		"""Genera un mapa de calor combinando todas las trayectorias sobre fondo negro.
 
+		Las zonas más transitadas aparecen en rojo/amarillo (caliente) y las
+		menos transitadas en azul/verde (frío). El fondo negro indica sin actividad.
+
 		Args:
-			all_trajectories: {nombre_video: (traj_x, traj_y)}.
-			first_frame: Primer frame de cualquier video para obtener dimensiones.
+			all_trajectories: ``{nombre_video: (traj_x, traj_y)}``.
+			first_frame: Primer frame de cualquier video, usado para obtener
+				las dimensiones del canvas. Puede ser None.
 			output_dir: Carpeta donde guardar el PNG.
 		"""
 		canvas, height, width = self.make_black_canvas(first_frame)

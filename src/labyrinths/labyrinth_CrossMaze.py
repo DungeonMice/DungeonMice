@@ -32,23 +32,6 @@ class CrossMaze(Labyrinth):
 		kernel_size: int = 5,
 		blur_size: int = 0,
 	):
-		"""Inicializa el laberinto en cruz.
-
-		Args:
-			video_path: Ruta al archivo de video o carpeta con videos.
-			treatment: Nombre del tratamiento aplicado al sujeto.
-			subject_id: Identificador del sujeto de experimentación.
-			regions: ``RegionManager`` con al menos 2 ``PolygonRegion``.
-			min_detection_area: Área mínima en píxeles para detectar al ratón.
-			hitbox_size: Semilado de la hitbox cuadrada en píxeles.
-			start_time: Tiempo en segundos desde el que se empieza a registrar.
-			end_time: Tiempo en segundos en que termina el registro, o None.
-			kernel_size: Tamaño del kernel morfológico del tracker.
-			blur_size: Tamaño del kernel GaussianBlur. 0 desactiva el blur.
-
-		Raises:
-			ValueError: Si hay menos de 2 regiones o alguna no es ``PolygonRegion``.
-		"""
 		super().__init__(
 			video_path, treatment, subject_id, "CrossMaze", regions,
 			min_detection_area, hitbox_size, start_time, end_time,
@@ -64,7 +47,7 @@ class CrossMaze(Labyrinth):
 		"""Valida que las regiones sean compatibles con CrossMaze.
 
 		Raises:
-			ValueError: Si hay menos de 2 regiones o alguna no es ``PolygonRegion``.
+			ValueError: Si hay menos de 2 regiones o alguna no es PolygonRegion.
 		"""
 		if len(self.regions.regions) < 2:
 			raise ValueError("CrossMaze requiere al menos 2 regiones de interes.")
@@ -76,11 +59,12 @@ class CrossMaze(Labyrinth):
 	# Procesamiento
 	# ------------------------------------------------------------------
 
-	def process_frame(self, position: list, time: float) -> None:
+	def process_frame(self, position: tuple | None, time: float) -> None:
 		"""Almacena la posición del frame actual en la trayectoria.
 
 		Args:
-			position: Lista de coordenadas ``(x, y)`` detectadas en el frame.
+			position: Coordenadas (x, y) del ratón detectado, o None si no
+				se detectó.
 			time: Tiempo actual en segundos.
 		"""
 		self.get_position(position, time)
@@ -96,11 +80,11 @@ class CrossMaze(Labyrinth):
 		"""Genera los outputs finales para todos los videos procesados.
 
 		Args:
-			all_results: ``{nombre_video: events_on_each_region}``.
-			all_trajectories: ``{nombre_video: (trajectory_x, trajectory_y)}``.
-			all_video_paths: ``{nombre_video: ruta_absoluta}``.
-			all_first_frames: ``{nombre_video: primer_frame}``.
-			all_start_times: ``{nombre_video: start_time}``.
+			all_results: {nombre_video: events_on_each_region}.
+			all_trajectories: {nombre_video: (trajectory_x, trajectory_y)}.
+			all_video_paths: {nombre_video: ruta_absoluta}.
+			all_first_frames: {nombre_video: primer_frame}.
+			all_start_times: {nombre_video: start_time}.
 		"""
 		self.write_results(all_results, all_trajectories, all_video_paths, all_first_frames, all_start_times)
 
@@ -121,8 +105,8 @@ class CrossMaze(Labyrinth):
 		región, incluyendo la tabla de eventos de entrada/salida.
 
 		Args:
-			ws: Hoja de Excel (``Worksheet``) donde escribir.
-			events_on_each_region: ``{region_id: ZoneState}`` con los eventos
+			ws: Hoja de Excel (Worksheet) donde escribir.
+			events_on_each_region: {region_id: ZoneState} con los eventos
 				de cada región.
 			total_distance: Distancia total recorrida en píxeles.
 			total_recording_time: Duración total de la grabación en segundos.

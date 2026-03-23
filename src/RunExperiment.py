@@ -113,7 +113,6 @@ def process_single_video(video_path: str, labyrinth) -> tuple:
 			tracker.start_recording()
 
 		pos_real, fgmask = tracker.locate(gray)
-		trajectory = tracker.trajectory
 
 		if frame_idx >= start_frame:
 			logic.update(pos_real, t, frame_idx)
