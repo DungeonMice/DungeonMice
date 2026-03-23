@@ -571,7 +571,7 @@ class Labyrinth:
 			return None
 
 		density = cv2.GaussianBlur(density, (31, 31), 0)
-		density_norm = cv2.normalize(density, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+		density_norm = cv2.normalize(density, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8) # type: ignore
 		return density_norm
 
 	def save_heatmap_image(
