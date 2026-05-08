@@ -56,14 +56,14 @@ class EventLogic:
 		states: Diccionario {region_id: ZoneState} con el estado de cada región.
 	"""
 
-	def __init__(self, region_manager, hitbox_size: int = 0, min_entry_time: float = 1.0):
+	def __init__(self, region_manager, hitbox_size: int = 0, min_entry_time: float = 0.5):
 		"""Inicializa la lógica de eventos.
 
 		Args:
 			region_manager: Objeto RegionManager con la lista de regiones.
 			hitbox_size: Semilado de la hitbox cuadrada en píxeles.
-			min_entry_time: Tiempo mínimo en segundos para conservar un evento
-				con distancia menor a 1 píxel.
+			min_entry_time: Duración mínima en segundos para que una entrada se
+				cuente. Roces de borde (< 0.5s) quedan descartados. Default 0.5.
 		"""
 		self.regions = region_manager.regions
 		self.hitbox_w = hitbox_size
@@ -85,7 +85,13 @@ class EventLogic:
 
 		for region in self.regions:
 			state = self.states[region.region_id]
-			inside_now = region.contains_hitbox(position, self.hitbox_w, self.hitbox_h)
+			# Pasar el estado actual para activar histéresis: si ya está dentro
+			# se usa exit_threshold (< overlap_threshold), evitando micro-salidas
+			# cuando la hitbox oscila en el borde de la región.
+			inside_now = region.contains_hitbox(
+				position, self.hitbox_w, self.hitbox_h,
+				currently_inside=state.inside,
+			)
 
 			# Evento de entrada
 			if inside_now and not state.inside:
@@ -111,15 +117,17 @@ class EventLogic:
 
 				duration = t - state.enter_time  # type: ignore
 
-				# Descartar si distancia insignificante (Y para duración menor al mínimo agregar and duration < self.min_entry_time) 
-				if state._current_distance < 10.0:
+				# Descartar entradas demasiado breves o con movimiento insignificante.
+				# min_entry_time filtra roces de borde (ratón pasando por encima sin
+				# entrar realmente). La distancia < 10px filtra artefactos del tracker.
+				if duration < self.min_entry_time or state._current_distance < 10.0:
 					state.enter_frame.pop()
 					state.entries -= 1
 					state.enter_time = None
 					state._current_distance = 0.0
 					continue
 
-				state.total_time += t - state.enter_time  # type: ignore
+				state.total_time += duration
 				state.exit_frame.append(frame_idx)
 				state.events.append((state.enter_time, t))  # type: ignore
 				state.enter_time = None

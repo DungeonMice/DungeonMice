@@ -58,26 +58,33 @@ class Labyrinth:
 		end_time: float | None = None,
 		kernel_size: int = 5,
 		blur_size: int = 0,
+		mog_threshold: int = 30,
+		recording_lr: float = 0.002,
+		use_csrt: bool = True,
+		mog_history: int = 500,
 	):
 		"""Inicializa los parámetros comunes del experimento.
 
 		Args:
-			video_path: Ruta al archivo de video o carpeta con videos.
-			treatment: Nombre del tratamiento aplicado al sujeto.
-			subject_id: Identificador del sujeto de experimentación.
-			mace_type: Tipo de laberinto (e.g. ``"CrossMaze"``).
-			regions: ``RegionManager`` con las regiones de interés.
-			min_detection_area: Área mínima en píxeles para detectar al ratón.
-			hitbox_size: Semilado de la hitbox cuadrada en píxeles.
-			start_time: Tiempo en segundos desde el que se empieza a registrar.
-			end_time: Tiempo en segundos en que termina el registro, o None
-				para procesar hasta el final del video.
+			video_path: Ruta al video o carpeta de videos.
+			treatment: Nombre del tratamiento.
+			subject_id: ID del sujeto.
+			mace_type: Tipo de laberinto ("CrossMaze", "MorrisPool", etc.).
+			regions: Regiones de interés.
+			min_detection_area: Área mínima del blob para ser considerado ratón.
+			hitbox_size: Semilado de la hitbox en píxeles.
+			start_time: Segundo desde el que empieza el registro.
+			end_time: Segundo de fin, o None para procesar hasta el final.
 			kernel_size: Tamaño del kernel morfológico del tracker.
-			blur_size: Tamaño del kernel GaussianBlur. 0 desactiva el blur.
-
-		Raises:
-			ValueError: Si alguno de los parámetros no cumple las restricciones
-				de tipo o valor definidas en ``_validate_inputs``.
+			blur_size: Tamaño del GaussianBlur. 0 = sin blur.
+			mog_threshold: Umbral de varianza de MOG2. Más alto = menos
+				falsos positivos. Default 30.
+			recording_lr: Learning rate de MOG2 durante grabación. Default 0.002.
+			use_csrt: Si True activa el tracker CSRT como primario. Desactivar
+				ayuda cuando MOG2 es inestable (e.g. ratones de pelaje claro).
+				Default True.
+			mog_history: Frames que MOG2 usa para construir el modelo de fondo.
+				Aumentar ayuda en videos con fondo complejo. Default 500.
 		"""
 		self.video_path         = video_path
 		self.treatment          = treatment
@@ -90,6 +97,10 @@ class Labyrinth:
 		self.hitbox_size        = hitbox_size
 		self.kernel_size        = kernel_size
 		self.blur_size          = blur_size
+		self.mog_threshold      = mog_threshold
+		self.recording_lr       = recording_lr
+		self.use_csrt           = use_csrt
+		self.mog_history        = mog_history
 		self.fps                = 0  # se sobreescribe al abrir el video en RunExperiment
 
 		self._validate_inputs()
@@ -161,6 +172,7 @@ class Labyrinth:
 		all_video_paths: dict,
 		all_first_frames: dict,
 		all_start_times: dict,
+		all_recording_durations: dict,
 	) -> None:
 		"""Procesa los resultados de todos los videos. Debe ser implementado por cada subclase.
 
@@ -173,6 +185,10 @@ class Labyrinth:
 			all_video_paths: ``{nombre_video: ruta_absoluta}``.
 			all_first_frames: ``{nombre_video: primer_frame}``.
 			all_start_times: ``{nombre_video: start_time}``.
+			all_recording_durations: ``{nombre_video: duracion_grabacion_segundos}``
+				con la duración real grabada por video (tiempo del video menos
+				el warmup inicial). Se usa para calcular los porcentajes de tiempo
+				de forma correcta.
 
 		Raises:
 			NotImplementedError: Siempre. La subclase debe sobreescribir este metodo.
@@ -249,6 +265,7 @@ class Labyrinth:
 		all_video_paths: dict,
 		all_first_frames: dict,
 		all_start_times: dict,
+		all_recording_durations: dict,
 	) -> None:
 		"""Genera el archivo Excel y las imágenes PNG de trayectoria y heatmap.
 
@@ -262,6 +279,10 @@ class Labyrinth:
 			all_video_paths: ``{nombre_video: ruta_absoluta}``.
 			all_first_frames: ``{nombre_video: primer_frame}``.
 			all_start_times: ``{nombre_video: start_time}``.
+			all_recording_durations: ``{nombre_video: duracion_grabacion_segundos}``
+				con la duración real grabada por video (frames totales menos
+				warmup). Se usa como denominador en los cálculos de porcentajes
+				de tiempo.
 		"""
 		wb = Workbook()
 		wb.remove(wb.active)
@@ -276,7 +297,7 @@ class Labyrinth:
 			ws = wb.create_sheet(title=video_name[:31])
 
 			total_distance       = self.get_total_distance()
-			total_recording_time = len(self.trajectory_x) / self.fps
+			total_recording_time = all_recording_durations[video_name]
 
 			self.write_metadata(ws, video_name)
 			self.write_summary(ws, events_on_each_region, total_distance, total_recording_time)
@@ -542,6 +563,33 @@ class Labyrinth:
 			height, width = 600, 800
 		canvas = np.zeros((height, width, 3), dtype=np.uint8)
 		return canvas, height, width
+
+	def get_valid_mask(self, height: int, width: int) -> np.ndarray:
+		"""Genera una máscara binaria del área válida del laberinto.
+
+		Combina las máscaras de todas las regiones con una dilatación generosa
+		para cubrir también los pasillos y el centro del laberinto, que no
+		forman parte de ninguna región de interés pero sí son zona válida de
+		movimiento.
+
+		Las subclases pueden sobreescribir este método para una máscara más
+		precisa si la dilatación genérica no es suficiente.
+
+		Args:
+			height (int): Alto del frame en píxeles.
+			width (int): Ancho del frame en píxeles.
+
+		Returns:
+			np.ndarray: Array uint8 con 255 en la zona válida y 0 fuera.
+		"""
+		mask = np.zeros((height, width), dtype=np.uint8)
+		for region in self.regions.regions:
+			region_mask = region.mask((height, width))
+			mask = cv2.bitwise_or(mask, region_mask)
+		# Dilatar generosamente para cubrir pasillos y zona central
+		kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (80, 80))
+		mask = cv2.dilate(mask, kernel, iterations=3)
+		return mask
 
 	def draw_arena_outline(self, canvas: np.ndarray) -> None:
 		"""Dibuja el contorno del área experimental sobre el canvas.

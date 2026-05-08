@@ -31,11 +31,37 @@ class CrossMaze(Labyrinth):
 		end_time: float | None = None,
 		kernel_size: int = 5,
 		blur_size: int = 0,
+		mog_threshold: int = 30,
+		recording_lr: float = 0.002,
+		use_csrt: bool = True,
+		mog_history: int = 500,
 	):
+		"""Inicializa el laberinto en cruz.
+
+		Args:
+			video_path: Ruta al video o carpeta de videos.
+			treatment: Nombre del tratamiento.
+			subject_id: ID del sujeto.
+			regions: Regiones de interés (todas PolygonRegion, mínimo 2).
+			min_detection_area: Área mínima del blob en píxeles.
+			hitbox_size: Semilado de la hitbox en píxeles.
+			start_time: Segundo de inicio del registro.
+			end_time: Segundo de fin, o None.
+			kernel_size: Kernel morfológico del tracker.
+			blur_size: GaussianBlur. 0 = sin blur.
+			mog_threshold: Umbral de varianza MOG2.
+			recording_lr: Learning rate MOG2 durante grabación.
+			use_csrt: Activar CSRT como tracker primario.
+			mog_history: Frames para el modelo de fondo de MOG2.
+
+		Raises:
+			ValueError: Si hay menos de 2 regiones o alguna no es PolygonRegion.
+		"""
 		super().__init__(
 			video_path, treatment, subject_id, "CrossMaze", regions,
 			min_detection_area, hitbox_size, start_time, end_time,
-			kernel_size, blur_size,
+			kernel_size, blur_size, mog_threshold, recording_lr,
+			use_csrt, mog_history,
 		)
 		self.validate_cross_maze_regions()
 
@@ -76,17 +102,23 @@ class CrossMaze(Labyrinth):
 		all_video_paths: dict,
 		all_first_frames: dict,
 		all_start_times: dict,
+		all_recording_durations: dict,
 	) -> None:
 		"""Genera los outputs finales para todos los videos procesados.
 
 		Args:
-			all_results: {nombre_video: events_on_each_region}.
-			all_trajectories: {nombre_video: (trajectory_x, trajectory_y)}.
-			all_video_paths: {nombre_video: ruta_absoluta}.
-			all_first_frames: {nombre_video: primer_frame}.
-			all_start_times: {nombre_video: start_time}.
+			all_results: ``{nombre_video: events_on_each_region}``.
+			all_trajectories: ``{nombre_video: (trajectory_x, trajectory_y)}``.
+			all_video_paths: ``{nombre_video: ruta_absoluta}``.
+			all_first_frames: ``{nombre_video: primer_frame}``.
+			all_start_times: ``{nombre_video: start_time}``.
+			all_recording_durations: ``{nombre_video: duracion_grabacion_segundos}``
+				con la duración real grabada por video.
 		"""
-		self.write_results(all_results, all_trajectories, all_video_paths, all_first_frames, all_start_times)
+		self.write_results(
+			all_results, all_trajectories, all_video_paths,
+			all_first_frames, all_start_times, all_recording_durations,
+		)
 
 	# ------------------------------------------------------------------
 	# Resultados
@@ -112,7 +144,10 @@ class CrossMaze(Labyrinth):
 			total_distance: Distancia total recorrida en píxeles.
 			total_recording_time: Duración total de la grabación en segundos.
 		"""
-		recording_time = len(self.trajectory_x) / self.fps
+		# total_recording_time ya viene correctamente calculado desde write_results
+		# (frames totales del video menos el warmup inicial).
+		# No recalcular con trajectory_x, que solo cuenta frames con detección.
+		recording_time = total_recording_time
 
 		# Calcular métricas por región
 		metrics = {}

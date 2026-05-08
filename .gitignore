@@ -1,0 +1,27 @@
+# Videos
+videos/
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# Outputs generados
+*.xlsx
+*.png
+*.jpg
+
+# Herramientas de diagnóstico (no parte del flujo principal)
+src/test_params.py
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+*.code-workspace

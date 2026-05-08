@@ -12,30 +12,21 @@ input1 = CrossMaze(
         PolygonRegion("norte", [[545,350],[635,350],[635,10],[545,10]],   overlap_threshold=0.80),
         PolygonRegion("sur",   [[545,720],[635,720],[635,420],[545,420]], overlap_threshold=0.80)
     ]),
-    min_detection_area=2000,
+    min_detection_area=800,
     hitbox_size=40,
     start_time=25,
     kernel_size=15,
-    blur_size=9
+    blur_size=9,
+    # Tracker MOG2+CSRT — ajustado para video con movimiento y efectos de luz:
+    # mog_threshold: más alto que el default (30) para reducir falsos positivos.
+    #   Sube a 50 si siguen apareciendo blobs de ruido; baja a 25 si se pierden detecciones.
+    mog_threshold=35,
+    # recording_lr: adaptación lenta del fondo durante grabación.
+    #   Sube a 0.005 si la iluminación cambia rápido; baja a 0.001 si el ratón quieto desaparece.
+    recording_lr=0.003,
 )
 
-input2 = {
-	"video_path" : "../Escopolamina 1.avi",
-	"regions": RegionManager([
-							CircleRegion("centro",  [151,110], 40),
-							]),
-	
-}
-
-input3 = {
-	"video_path" : "../Escopolamina 1.avi",
-	"regions": RegionManager([
-							CircularFractionRegion("H", (151, 110), 50, angle_start=90, fraction=0.5),
-							]),
-	
-}
-
-input4 = MorrisPool(video_path= "../videos/MorrisPool", regions= RegionManager([
+input2 = MorrisPool(video_path= "../videos/MorrisPool", regions= RegionManager([
 							CircularFractionRegion("H", (151, 110), 90, angle_start=270, fraction=0.25, overlap_threshold=0.75),
 							]), 
 							treatment="Escopolamina",

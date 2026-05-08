@@ -83,12 +83,21 @@ def process_single_video(video_path: str, labyrinth) -> tuple:
 		return None, [], [], None
 	cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # rebobinar al inicio
 
+	# Construir máscara del área válida del laberinto a partir de las regiones.
+	# Restringe la detección a la zona del laberinto y descarta artefactos de borde.
+	valid_mask = labyrinth.get_valid_mask(height, width)
+
 	frame_idx  = 0
 	tracker    = MouseTracker(
 		min_area=labyrinth.min_detection_area,
 		kernel_size=labyrinth.kernel_size,
 		blur_size=labyrinth.blur_size,
+		mog_threshold=labyrinth.mog_threshold,
+		recording_lr=labyrinth.recording_lr,
+		use_csrt=labyrinth.use_csrt,
+		mog_history=labyrinth.mog_history,
 	)
+	tracker.set_valid_mask(valid_mask)
 	logic      = EventLogic(labyrinth.regions, hitbox_size=labyrinth.hitbox_size)
 	visualizer = ExperimentVisualizer(labyrinth.regions, hitbox_size=labyrinth.hitbox_size)
 
@@ -139,11 +148,15 @@ def process_single_video(video_path: str, labyrinth) -> tuple:
 	cap.release()
 	cv2.destroyAllWindows()
 
+	# Duración real grabada: tiempo total del video menos el warmup inicial.
+	recording_duration = max(0.0, (frame_idx / fps) - labyrinth.start_time)
+
 	return (
 		logic.states,
 		list(labyrinth.trajectory_x),
 		list(labyrinth.trajectory_y),
 		first_frame,
+		recording_duration,
 	)
 
 
@@ -179,28 +192,30 @@ def main(labyrinth) -> None:
 	config = load_config(folder)
 	default_start_time = labyrinth.start_time
 
-	all_results      = {}
-	all_trajectories = {}
-	all_video_paths  = {}
-	all_first_frames = {}
-	all_start_times  = {}
+	all_results             = {}
+	all_trajectories        = {}
+	all_video_paths         = {}
+	all_first_frames        = {}
+	all_start_times         = {}
+	all_recording_durations = {}
 
 	for video_file in videos:
 		video_name = os.path.splitext(os.path.basename(video_file))[0]
 		labyrinth.start_time = config.get(video_name, default_start_time)
 		print(f"\nProcesando: {video_name} (start_time={labyrinth.start_time}s)")
 
-		events, traj_x, traj_y, first_frame = process_single_video(video_file, labyrinth)
+		events, traj_x, traj_y, first_frame, recording_duration = process_single_video(video_file, labyrinth)
 
 		if events is None:
 			print(f"[ADVERTENCIA] Se omite {video_name}: no se pudo leer el video.")
 			continue
 
-		all_results[video_name]      = events
-		all_trajectories[video_name] = (traj_x, traj_y)
-		all_video_paths[video_name]  = video_file
-		all_first_frames[video_name] = first_frame
-		all_start_times[video_name]  = labyrinth.start_time
+		all_results[video_name]             = events
+		all_trajectories[video_name]        = (traj_x, traj_y)
+		all_video_paths[video_name]         = video_file
+		all_first_frames[video_name]        = first_frame
+		all_start_times[video_name]         = labyrinth.start_time
+		all_recording_durations[video_name] = recording_duration
 
 	labyrinth.process_video(
 		all_results=all_results,
@@ -208,4 +223,5 @@ def main(labyrinth) -> None:
 		all_video_paths=all_video_paths,
 		all_first_frames=all_first_frames,
 		all_start_times=all_start_times,
+		all_recording_durations=all_recording_durations,
 	)

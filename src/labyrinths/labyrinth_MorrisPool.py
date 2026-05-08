@@ -32,30 +32,37 @@ class MorrisPool(Labyrinth):
 		end_time: float | None = None,
 		kernel_size: int = 5,
 		blur_size: int = 0,
+		mog_threshold: int = 30,
+		recording_lr: float = 0.002,
+		use_csrt: bool = True,
+		mog_history: int = 500,
 	):
 		"""Inicializa el experimento de Piscina de Morris.
 
 		Args:
-			video_path: Ruta al archivo de video o carpeta con videos.
-			treatment: Nombre del tratamiento aplicado al sujeto.
-			subject_id: Identificador del sujeto de experimentación.
-			regions: ``RegionManager`` con exactamente una ``CircularFractionRegion``
-				de 90° (cuarto de círculo).
-			min_detection_area: Área mínima en píxeles para detectar al ratón.
-			hitbox_size: Semilado de la hitbox cuadrada en píxeles.
-			start_time: Tiempo en segundos desde el que se empieza a registrar.
-			end_time: Tiempo en segundos en que termina el registro, o None.
-			kernel_size: Tamaño del kernel morfológico del tracker.
-			blur_size: Tamaño del kernel GaussianBlur. 0 desactiva el blur.
+			video_path: Ruta al video o carpeta de videos.
+			treatment: Nombre del tratamiento.
+			subject_id: ID del sujeto.
+			regions: Debe tener exactamente una CircularFractionRegion de 90°.
+			min_detection_area: Área mínima del blob en píxeles.
+			hitbox_size: Semilado de la hitbox en píxeles.
+			start_time: Segundo de inicio del registro.
+			end_time: Segundo de fin, o None.
+			kernel_size: Kernel morfológico del tracker.
+			blur_size: GaussianBlur. 0 = sin blur.
+			mog_threshold: Umbral de varianza MOG2.
+			recording_lr: Learning rate MOG2 durante grabación.
+			use_csrt: Activar CSRT como tracker primario.
+			mog_history: Frames para el modelo de fondo de MOG2.
 
 		Raises:
-			ValueError: Si la región no es exactamente una ``CircularFractionRegion``
-				de 90°.
+			ValueError: Si la región no es una CircularFractionRegion de 90°.
 		"""
 		super().__init__(
 			video_path, treatment, subject_id, "MorrisPool", regions,
 			min_detection_area, hitbox_size, start_time, end_time,
-			kernel_size, blur_size,
+			kernel_size, blur_size, mog_threshold, recording_lr,
+			use_csrt, mog_history,
 		)
 		self.validate_morris_region()
 		self.enter_frame = []
@@ -198,6 +205,7 @@ class MorrisPool(Labyrinth):
 		all_video_paths: dict,
 		all_first_frames: dict,
 		all_start_times: dict,
+		all_recording_durations: dict,
 	) -> None:
 		"""Genera los outputs finales para todos los videos procesados.
 
@@ -207,8 +215,13 @@ class MorrisPool(Labyrinth):
 			all_video_paths: ``{nombre_video: ruta_absoluta}``.
 			all_first_frames: ``{nombre_video: primer_frame}``.
 			all_start_times: ``{nombre_video: start_time}``.
+			all_recording_durations: ``{nombre_video: duracion_grabacion_segundos}``
+				con la duración real grabada por video.
 		"""
-		self.write_results(all_results, all_trajectories, all_video_paths, all_first_frames, all_start_times)
+		self.write_results(
+			all_results, all_trajectories, all_video_paths,
+			all_first_frames, all_start_times, all_recording_durations,
+		)
 
 	# ------------------------------------------------------------------
 	# Métodos auxiliares (mantenidos por documentación histórica)

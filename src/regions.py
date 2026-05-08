@@ -38,11 +38,22 @@ class Region:
 	"""
 
 	def __init__(self, overlap_threshold: float = 0.0):
-		"""Inicializa la región con su umbral de solapamiento.
+		"""Inicializa la región con sus umbrales de solapamiento.
+
+		Implementa histéresis automática: el umbral de salida es el 75 % del
+		umbral de entrada, evitando que micro-movimientos en el borde de la
+		región generen entradas y salidas falsas en rápida sucesión.
+
+		Ejemplo con ``overlap_threshold=0.80``:
+
+		- Entrar: la hitbox debe tener ≥ 80 % de solapamiento con la región.
+		- Salir: la hitbox debe bajar a < 60 % de solapamiento.
+
+		En modo punto (``overlap_threshold=0.0``) la histéresis no aplica.
 
 		Args:
 			overlap_threshold: Fracción mínima de la hitbox dentro de la región
-				para activar la detección. 0.0 usa el modo punto original.
+				para registrar una entrada. 0.0 usa el modo punto original.
 
 		Raises:
 			ValueError: Si overlap_threshold no está en [0.0, 1.0].
@@ -50,6 +61,9 @@ class Region:
 		if not (0.0 <= overlap_threshold <= 1.0):
 			raise ValueError("overlap_threshold debe estar en [0.0, 1.0]")
 		self.overlap_threshold = overlap_threshold
+		# Umbral de salida: 75 % del de entrada.  Garantiza que una vez
+		# "dentro", fluctuaciones menores en el borde no registren una salida.
+		self.exit_threshold = overlap_threshold * 0.75
 
 	def contains(self, point: tuple[float, float]) -> bool:
 		"""Determina si un punto pertenece a la región.
@@ -94,16 +108,24 @@ class Region:
 		point: tuple[float, float],
 		hitbox_w: int,
 		hitbox_h: int | None = None,
+		currently_inside: bool = False,
 	) -> bool:
 		"""Determina si la hitbox está suficientemente dentro de la región.
 
-		Si overlap_threshold es 0.0, delega en contains(point).
-		En caso contrario evalúa overlap_fraction contra el umbral.
+		Aplica histéresis automática: usa ``overlap_threshold`` para decidir
+		una entrada y ``exit_threshold`` (más bajo) para decidir una salida.
+		Esto evita que el objeto oscile rápidamente entre "dentro" y "fuera"
+		cuando la hitbox está en el borde de la región.
+
+		Si ``overlap_threshold`` es 0.0, delega directamente en ``contains``.
 
 		Args:
 			point: Centro de la hitbox en coordenadas de imagen (x, y).
 			hitbox_w: Semiancho de la hitbox en píxeles.
 			hitbox_h: Semialto de la hitbox en píxeles. Si es None se usa hitbox_w.
+			currently_inside: True si el objeto ya está dentro de la región en
+				el frame anterior. Cuando es True se aplica ``exit_threshold``
+				en lugar de ``overlap_threshold``, implementando la histéresis.
 
 		Returns:
 			True si la condición de solapamiento se cumple.
@@ -112,7 +134,8 @@ class Region:
 			return self.contains(point)
 		if hitbox_h is None:
 			hitbox_h = hitbox_w
-		return self.overlap_fraction(point, hitbox_w, hitbox_h) >= self.overlap_threshold
+		threshold = self.exit_threshold if currently_inside else self.overlap_threshold
+		return self.overlap_fraction(point, hitbox_w, hitbox_h) >= threshold
 
 	def mask(self, shape: tuple[int, int]) -> np.ndarray:
 		"""Genera una máscara binaria de la región.
