@@ -39,7 +39,7 @@ class MorrisPool(Labyrinth):
 	):
 		"""Inicializa el experimento de Piscina de Morris.
 
-		Args:
+		Attributes:
 			video_path: Ruta al video o carpeta de videos.
 			treatment: Nombre del tratamiento.
 			subject_id: ID del sujeto.

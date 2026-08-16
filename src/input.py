@@ -1,5 +1,6 @@
 from labyrinths.labyrinth_MorrisPool import MorrisPool
 from labyrinths.labyrinth_CrossMaze import CrossMaze
+from labyrinths.labyrinth_BarnesMaze import BarnesMaze
 from regions import RegionManager, PolygonRegion, CircleRegion, CircularFractionRegion
 
 input1 = CrossMaze(
@@ -37,3 +38,21 @@ input2 = MorrisPool(video_path= "../videos/MorrisPool", regions= RegionManager([
        						kernel_size=5,
     						blur_size=0
     						)
+
+input3 = BarnesMaze(video_path= "../videos/BarnesMaze", regions= RegionManager([
+                            CircleRegion("H", (320, 240), 40, overlap_threshold=0.75),
+                            CircleRegion("N", (320, 60), 30, overlap_threshold=0.75),
+                            CircleRegion("E", (540, 240), 30, overlap_threshold=0.75),
+                            CircleRegion("S", (320, 420), 30, overlap_threshold=0.75),
+                            CircleRegion("W", (100, 240), 30, overlap_threshold=0.75),
+                            ]),
+                            treatment="Control",
+                            subject_id="1",
+                            min_detection_area=2,
+                            hitbox_size=30,
+                            start_time=17.5,
+                            kernel_size=15,
+                            blur_size=15,
+							#mog_threshold=30,
+                            #recording_lr=0.001,
+                            )

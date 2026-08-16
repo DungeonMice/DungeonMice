@@ -38,7 +38,7 @@ class CrossMaze(Labyrinth):
 	):
 		"""Inicializa el laberinto en cruz.
 
-		Args:
+		Attributes:
 			video_path: Ruta al video o carpeta de videos.
 			treatment: Nombre del tratamiento.
 			subject_id: ID del sujeto.
@@ -103,7 +103,8 @@ class CrossMaze(Labyrinth):
 		all_first_frames: dict,
 		all_start_times: dict,
 		all_recording_durations: dict,
-	) -> None:
+		) -> None:
+		
 		"""Genera los outputs finales para todos los videos procesados.
 
 		Args:

@@ -1,4 +1,4 @@
 from RunExperiment import main
-from input import input1, input2
+from input import input1, input2, input3
 
-main(input1)
+main(input3)

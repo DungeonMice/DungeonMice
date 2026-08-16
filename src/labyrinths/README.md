@@ -4,3 +4,4 @@ Se generó un clase madre 'Labyrinth' en "labyrinth.py", las clases hijas son:
 
 - labyrinth_CrossMaze.py ---> CrossMaze
 - labyrint_MorrisPool.py ---> MorrisPool
+- labyrinth_BarnesMaze.py ---> BarnesMaze
