@@ -1,0 +1,22 @@
+{
+    "labyrinth_type":     "MorrisPool",
+    "video_path":         "../videos/MorrisPool",
+    "treatment":          "Escopolamina",
+    "subject_id":         "1",
+    "start_time":         5,
+    "min_detection_area": 100,
+    "hitbox_size":        10,
+    "kernel_size":        5,
+    "blur_size":          0,
+    "regions": [
+        {
+            "type":              "CircularFractionRegion",
+            "id":                "H",
+            "center":            [151, 110],
+            "radius":            90,
+            "angle_start":       270,
+            "fraction":          0.25,
+            "overlap_threshold": 0.75
+        }
+    ]
+}

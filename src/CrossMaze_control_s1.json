@@ -1,0 +1,39 @@
+{
+    "labyrinth_type":     "CrossMaze",
+    "video_path":         "../videos/CrossMaze",
+    "treatment":          "Control",
+    "subject_id":         "1",
+    "start_time":         25,
+    "min_detection_area": 800,
+    "hitbox_size":        40,
+    "kernel_size":        15,
+    "blur_size":          9,
+    "mog_threshold":      35,
+    "recording_lr":       0.003,
+    "regions": [
+        {
+            "type":              "PolygonRegion",
+            "id":                "este",
+            "points":            [[630,420],[900,420],[900,350],[630,350]],
+            "overlap_threshold": 0.80
+        },
+        {
+            "type":              "PolygonRegion",
+            "id":                "oeste",
+            "points":            [[240,420],[240,350],[550,350],[550,420]],
+            "overlap_threshold": 0.80
+        },
+        {
+            "type":              "PolygonRegion",
+            "id":                "norte",
+            "points":            [[545,350],[635,350],[635,10],[545,10]],
+            "overlap_threshold": 0.80
+        },
+        {
+            "type":              "PolygonRegion",
+            "id":                "sur",
+            "points":            [[545,720],[635,720],[635,420],[545,420]],
+            "overlap_threshold": 0.80
+        }
+    ]
+}

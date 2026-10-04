@@ -3,7 +3,7 @@ import numpy as np
 from tracker import MouseTracker
 from logic import EventLogic
 from visualizer import ExperimentVisualizer
-import input
+import src.input_old as input_old
 
 """
 experiment.py
@@ -15,15 +15,18 @@ Este archivo se encarga de:
 - Iterar frame por frame
 - Calcular el tiempo real asociado a cada frame
 - Coordinar la detección del ratón, la evaluación de regiones y la lógica de eventos
+
+CODIGO VIEJO, NO USAR. SE DEBE USAR "RunExperiment.py" PARA EJECUTAR EL EXPERIMENTO. ESTE ARCHIVO SE MANTIENE SOLO PARA REFERENCIA.
+
 """
 
 # --- Inicialización del video ---
 
-input = input.input3 # Condiciones iniciales
+input_old = input_old.input3 # Condiciones iniciales
 # Poner que es input1, input2 o input3 para cada video.
 # Hay que cambiar también el min_area del tracker para cada video.
 
-video_path = input['video_path']
+video_path = input_old['video_path']
 
 cap = cv2.VideoCapture(video_path)
 fps = cap.get(cv2.CAP_PROP_FPS)
@@ -36,7 +39,7 @@ draw_start_frame = int(fps*6)  # *numero segundos después
 # --- Definición de regiones de interés ---
 # Más adelante podrán venir de seleccionar con el mouse,
 # sin cambiar el resto del backend.
-regions = input['regions']
+regions = input_old['regions']
 
 # --- Inicialización de módulos del backend ---
 tracker = MouseTracker(min_area=100) # Hay que ajustar el min_area para cada video, dependiendo del tamaño.
@@ -87,7 +90,7 @@ total_distance = tracker.get_total_distance()
 print(f"Distancia total: {total_distance:.2f} pixeles")
 
 # Guardar imagen de la trayectoria
-video_name = input['video_path'].split('.')[0]
+video_name = input_old['video_path'].split('.')[0]
 visualizer.save_trajectory_image(cap, tracker.trajectory, total_distance, 
                                 f"trajectory_{video_name}.png")
 # --- Liberación de recursos ---

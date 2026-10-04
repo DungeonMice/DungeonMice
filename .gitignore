@@ -10,6 +10,10 @@ videos/
 *.png
 *.jpg
 
+# Carpetas de outputs
+videos/
+
+
 # Herramientas de diagnóstico (no parte del flujo principal)
 src/test_params.py
 

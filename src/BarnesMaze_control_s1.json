@@ -1,0 +1,48 @@
+{
+    "labyrinth_type":     "BarnesMaze",
+    "video_path":         "../videos/BarnesMaze",
+    "treatment":          "Control",
+    "subject_id":         "1",
+    "start_time":         17.5,
+    "min_detection_area": 2,
+    "hitbox_size":        30,
+    "kernel_size":        15,
+    "blur_size":          15,
+    "regions": [
+        {
+            "type":              "CircleRegion",
+            "id":                "H",
+            "center":            [320, 240],
+            "radius":            40,
+            "overlap_threshold": 0.75
+        },
+        {
+            "type":              "CircleRegion",
+            "id":                "N",
+            "center":            [320, 60],
+            "radius":            30,
+            "overlap_threshold": 0.75
+        },
+        {
+            "type":              "CircleRegion",
+            "id":                "E",
+            "center":            [540, 240],
+            "radius":            30,
+            "overlap_threshold": 0.75
+        },
+        {
+            "type":              "CircleRegion",
+            "id":                "S",
+            "center":            [320, 420],
+            "radius":            30,
+            "overlap_threshold": 0.75
+        },
+        {
+            "type":              "CircleRegion",
+            "id":                "W",
+            "center":            [100, 240],
+            "radius":            30,
+            "overlap_threshold": 0.75
+        }
+    ]
+}
